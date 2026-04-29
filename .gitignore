@@ -11,6 +11,7 @@ instance/
 *.db
 *.log
 migrations/
+venv
 
 # VSCode
 .vscode/
