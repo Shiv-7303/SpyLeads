@@ -68,7 +68,28 @@ if (!window.__spyLeadsInjected) {
   }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'EXTRACT_PROFILE_DATA') {
+        const username = request.username;
+        bgLog(`Extracting profile data directly from DOM for ${username}`);
+        
+        // This is where DOM constants and selectors go. For now, dummy data since we can't reliably load IG in Sandbox.
+        const profileData = {
+           username: username,
+           full_name: document.title || username,
+           followers: "10K",
+           following: "500",
+           bio: "Sample bio",
+           timestamp: new Date().toISOString()
+        };
+        
+        sendResponse(profileData);
+        return false;
+    }
+    
     if (request.action === 'init-extraction') {
+      window._currentExtractionId = request.extractionId;
+      window._extractedProfiles = [];
+
       if (!window.location.href.includes("instagram.com")) {
         sendResponse({ success: false, error: 'Not on Instagram' });
         return;
@@ -126,11 +147,34 @@ if (!window.__spyLeadsInjected) {
           updateFloatingUI(`${statusPrefix} Hovering... (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
           
-          // Simulating 5. Click Profile & Wait to load
-          delay = getRandomDelay(delays.profile_open[0], delays.profile_open[1]);
-          bgLog(`Opening profile... waiting ${delay/1000}s`);
-          updateFloatingUI(`${statusPrefix} Loading profile... (${(delay/1000).toFixed(1)}s)`);
-          await sleep(delay);
+          
+          // Option A: Extract profile data via background script -> New Tab
+          // For now, we simulate getting username and sending it to background
+          const username = "dummy_user_" + currentExtracted; 
+          bgLog(`Requesting background extraction for ${username}...`);
+          updateFloatingUI(`${statusPrefix} Extracting ${username}...`);
+          
+          try {
+             const profileData = await new Promise((resolve) => {
+                 chrome.runtime.sendMessage({
+                     action: 'extract-profile-background',
+                     username: username
+                 }, resolve);
+             });
+             bgLog("Extracted data:", profileData);
+             
+             // Log progress to DB every time a profile is found
+             chrome.runtime.sendMessage({
+                 action: 'log-extraction-progress',
+                 extractionId: request.extractionId || window._currentExtractionId,
+                 profilesFound: currentExtracted,
+                 profilesData: window._extractedProfiles || [],
+                 status: 'in_progress'
+             });
+          } catch(e) {
+             bgLog("Error in background extraction:", e);
+          }
+
           
           // Simulating 7. Extract Data
           delay = getRandomDelay(delays.extraction[0], delays.extraction[1]);

@@ -1,4 +1,4 @@
-import { API_BASE_URL, PLANS, LIMITS } from './constants.js';
+import { API, PLANS, LIMITS } from './constants.js';
 
 let activeExtractionTabId = null;
 
@@ -50,7 +50,7 @@ async function getDeviceFingerprintPayload(licenseKey) {
 async function registerDevice(licenseKey) {
   try {
       const payload = await getDeviceFingerprintPayload(licenseKey);
-      const response = await fetch(`${API_BASE_URL}/api/v1/license/register-device`, {
+      const response = await fetch(`${API.backend_url}${API.endpoints.register_device}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -78,8 +78,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Keep channel open for async response
   }
   
+  
+  if (request.action === 'check-quota') {
+      handleQuotaCheck(request.count).then(sendResponse);
+      return true;
+  }
+  
   if (request.action === 'start-extraction') {
-    handleExtractionStart(request.tabId, request.count, request.accountAgeDays).then(sendResponse);
+    handleExtractionStart(request.tabId, request.count, request.accountAgeDays, request.hashtag, request.sessionSize).then(sendResponse);
     return true; // Keep channel open for async response
   }
   
@@ -115,7 +121,7 @@ async function handleLicenseVerification(licenseKey) {
     }
       
     const deviceHash = deviceResult.device_hash;
-    const response = await fetch(`${API_BASE_URL}/api/v1/license/verify-license`, {
+    const response = await fetch(`${API.backend_url}${API.endpoints.verify_license}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -157,7 +163,7 @@ async function fetchExtractionPlan(requestedCount, accountAgeDays) {
   }
   
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/extraction/generate-plan`, {
+    const response = await fetch(`${API.backend_url}${API.endpoints.generate_plan}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -178,9 +184,9 @@ async function fetchExtractionPlan(requestedCount, accountAgeDays) {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-function executeContentScriptAndMessage(tabId, plan) {
+function executeContentScriptAndMessage(tabId, plan, hashtag, sessionSize, extractionId) {
     return new Promise((resolve) => {
-        chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (response) => {
+        chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan, hashtag: hashtag, sessionSize: sessionSize, extractionId: extractionId }, (response) => {
             if (chrome.runtime.lastError) {
               console.log("Injecting content script dynamically because it wasn't ready.");
               
@@ -197,7 +203,7 @@ function executeContentScriptAndMessage(tabId, plan) {
                   // Wait a brief moment for the script execution context to fully parse
                   await sleep(500);
                   
-                  chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (retryResponse) => {
+                  chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan, hashtag: hashtag, sessionSize: sessionSize, extractionId: extractionId }, (retryResponse) => {
                       if (chrome.runtime.lastError) {
                           console.error("Still failed after injection: ", chrome.runtime.lastError);
                           resolve(false);
@@ -215,14 +221,16 @@ function executeContentScriptAndMessage(tabId, plan) {
     });
 }
 
-async function handleExtractionStart(tabId, requestedCount, accountAgeDays) {
+async function handleExtractionStart(tabId, requestedCount, accountAgeDays, hashtag, sessionSize) {
   const planResponse = await fetchExtractionPlan(requestedCount, accountAgeDays);
   if (!planResponse.success) {
       return planResponse; // Send error back to popup
   }
   
+  const extractionId = await startExtractionSessionInDB(hashtag, sessionSize);
+  
   const plan = planResponse.plan;
-  const scriptSuccess = await executeContentScriptAndMessage(tabId, plan);
+  const scriptSuccess = await executeContentScriptAndMessage(tabId, plan, hashtag, sessionSize, extractionId);
   
   if (!scriptSuccess) {
       return { success: false, error: "Failed to connect to Instagram page. Try refreshing the tab." };
@@ -230,4 +238,161 @@ async function handleExtractionStart(tabId, requestedCount, accountAgeDays) {
   
   activeExtractionTabId = tabId;
   return { success: true, plan: plan };
+}
+
+
+async function handleQuotaCheck(requestedCount) {
+  const data = await chrome.storage.sync.get(['licenseKey']);
+  if (!data.licenseKey) {
+    return { success: false, error: 'Not authenticated. Verify license first.' };
+  }
+  
+  try {
+    const response = await fetch(`${API.backend_url}${API.endpoints.check_quota}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            license_key: data.licenseKey,
+            device_id: await getInstallId()
+        })
+    });
+    
+    if (response.status === 403) {
+      const result = await response.json();
+      return { success: true, allowed: false, reason: result.reason || result.error || "Quota error" };
+    }
+    
+    const result = await response.json();
+    return { success: true, allowed: result.allowed, session_size: result.session_size, remaining: result.remaining };
+  } catch (err) {
+      console.error("Failed to check quota", err);
+      return { success: false, error: "Network error checking quota." };
+  }
+}
+
+async function startExtractionSessionInDB(hashtag, sessionSize) {
+  const data = await chrome.storage.sync.get(['licenseKey']);
+  try {
+    const response = await fetch(`${API.backend_url}${API.endpoints.start_extraction}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            license_key: data.licenseKey,
+            device_id: await getInstallId(),
+            extraction_type: 'hashtag',
+            query: hashtag,
+            session_size: sessionSize
+        })
+    });
+    const result = await response.json();
+    return result.extraction_id;
+  } catch (err) {
+      console.error("Failed to start db extraction", err);
+      return null;
+  }
+}
+
+
+// Listener for opening background tabs for profile extraction
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    if (request.action === 'extract-profile-background') {
+        extractProfileInBackground(request.username, sender.tab.id).then(sendResponse);
+        return true;
+    }
+    
+    if (request.action === 'log-extraction-progress') {
+        logExtractionProgress(request.extractionId, request.profilesFound, request.profilesData, request.status);
+        return false;
+    }
+});
+
+async function logExtractionProgress(extractionId, profilesFound, profilesData, status) {
+  try {
+    await fetch(`${API.backend_url}${API.endpoints.log_extraction}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            extraction_id: extractionId,
+            profiles_found: profilesFound,
+            profiles_extracted: profilesData,
+            status: status
+        })
+    });
+  } catch(e) {
+      console.error("Failed to log progress", e);
+  }
+}
+
+async function extractProfileInBackground(username, mainTabId) {
+    const profileUrl = `https://www.instagram.com/${username}/`;
+    
+    // Step 1: Open profile in new background tab
+    const profileTab = await chrome.tabs.create({
+      url: profileUrl,
+      active: false,  // BACKGROUND TAB
+      openerTabId: mainTabId
+    });
+    
+    console.log(`[EXTRACT] Opened profile tab: ${profileTab.id} for ${username}`);
+    
+    // Step 2: Inject content script
+    try {
+        await waitForTabReady(profileTab.id);
+        
+        await chrome.scripting.executeScript({
+            target: { tabId: profileTab.id },
+            files: ['content.js']
+        });
+        
+        // Brief pause for script evaluation
+        await sleep(500);
+        
+        // Step 3: Send message to extract profile data
+        const profileData = await new Promise((resolve) => {
+            chrome.tabs.sendMessage(profileTab.id, {
+                action: 'EXTRACT_PROFILE_DATA',
+                username: username
+            }, (response) => {
+                if (chrome.runtime.lastError) {
+                    console.error("Error communicating with profile tab:", chrome.runtime.lastError);
+                    resolve({ username: username, error: "Failed to extract" });
+                } else {
+                    resolve(response || { username: username, error: "Empty response" });
+                }
+            });
+        });
+        
+        console.log(`[EXTRACT] Got profile data for ${username}:`, profileData);
+        
+        // Step 4: Close profile tab silently
+        await chrome.tabs.remove(profileTab.id);
+        console.log(`[EXTRACT] Closed profile tab for ${username}`);
+        
+        return profileData;
+    } catch(e) {
+        console.error("Failed to extract profile background:", e);
+        try { await chrome.tabs.remove(profileTab.id); } catch(err){}
+        return { username: username, error: "Extraction failed" };
+    }
+}
+
+async function waitForTabReady(tabId, timeout = 10000) {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    try {
+      const tab = await chrome.tabs.get(tabId);
+      if (tab.status === 'complete') {
+          return true;
+      }
+    } catch (e) {}
+    
+    await sleep(500);
+  }
+  
+  throw new Error(`Tab ${tabId} failed to load in ${timeout}ms`);
 }

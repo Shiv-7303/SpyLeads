@@ -1,4 +1,4 @@
-import { PLANS, LIMITS, IG_CONSTANTS } from './constants.js';
+import { PLANS, LIMITS, API } from './constants.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Elements
@@ -32,6 +32,24 @@ document.addEventListener('DOMContentLoaded', async () => {
           extractBtn.disabled = true;
           extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
       }
+  });
+  
+  // Listen for extraction updates
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'extraction-completed') {
+      extractBtn.disabled = false;
+      extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
+      showMessage('Extraction completed successfully!', false);
+      
+      // Update quota
+      chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
+        updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
+      });
+    } else if (message.action === 'extraction-error') {
+      extractBtn.disabled = false;
+      extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
+      showMessage(message.error || 'Extraction failed.', true);
+    }
   });
 
   // UI Updaters
@@ -109,37 +127,66 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
-  extractBtn.addEventListener('click', () => {
+  extractBtn.addEventListener('click', async () => {
     extractBtn.disabled = true;
     const originalText = extractBtn.innerHTML;
-    extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> Generating Plan...';
+    extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> Checking Quota...';
     
     // Check if on IG
-    chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+    chrome.tabs.query({active: true, currentWindow: true}, async function(tabs) {
       if(!tabs[0] || !tabs[0].url.includes("instagram.com")) {
         showMessage("Please navigate to Instagram first.");
         extractBtn.disabled = false;
         extractBtn.innerHTML = originalText;
         return;
       }
-      
+
+      // We need to parse hashtags from input if possible, but let's assume current tab URL is hashtag for now or use dummy hashtag
+      const hashtag = "fitness"; // Should come from UI, keeping dummy for now or extracting from URL
+      const url = new URL(tabs[0].url);
+      let extractedHashtag = url.pathname.split('/explore/tags/')[1] || "fitness";
+      extractedHashtag = extractedHashtag.replace('/', '');
+
+      // Step 1: Check Quota via background message
       chrome.runtime.sendMessage({ 
-        action: 'start-extraction', 
-        count: parseInt(extractCountInput.value) || 10,
-        accountAgeDays: IG_CONSTANTS.DEFAULT_ACCOUNT_AGE_DAYS, // default for now unless we add an input
-        tabId: tabs[0].id
-      }, (res) => {
-          if (res && res.success) {
-             const p = res.plan;
-             let m = `Extraction started! Est. duration: ${p.session_duration_minutes}m.`;
-             if (p.warm_up_message) m += ` Note: ${p.warm_up_message}`;
-             showMessage(m, false);
-             extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
-          } else {
-             showMessage(res?.error || "Failed to start extraction");
+        action: 'check-quota', 
+        count: parseInt(extractCountInput.value) || 10
+      }, (quotaRes) => {
+          if (!quotaRes || !quotaRes.success) {
+             showMessage(quotaRes?.error || "Quota check failed");
              extractBtn.disabled = false;
              extractBtn.innerHTML = originalText;
+             return;
           }
+          
+          if (!quotaRes.allowed) {
+             showMessage(quotaRes.reason || "Quota exceeded");
+             extractBtn.disabled = false;
+             extractBtn.innerHTML = originalText;
+             return;
+          }
+
+          extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> Generating Plan...';
+          
+          chrome.runtime.sendMessage({ 
+            action: 'start-extraction', 
+            count: parseInt(extractCountInput.value) || 10,
+            accountAgeDays: 7, // default
+            tabId: tabs[0].id,
+            hashtag: extractedHashtag,
+            sessionSize: quotaRes.session_size
+          }, (res) => {
+              if (res && res.success) {
+                 const p = res.plan;
+                 let m = `Extraction started!`; // p.session_duration_minutes might be undefined if we change plan
+                 showMessage(m, false);
+                 extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
+              } else {
+                 showMessage(res?.error || "Failed to start extraction");
+                 extractBtn.disabled = false;
+                 extractBtn.innerHTML = originalText;
+              }
+          });
       });
     });
   });

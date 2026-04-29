@@ -6,6 +6,7 @@ from app import create_app
 # Import models to ensure SQLAlchemy registers them before create_all
 from app.models import license
 from app.models import device
+from app.models import extraction
 
 def init_db():
     app = create_app()
