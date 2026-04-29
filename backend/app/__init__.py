@@ -25,6 +25,8 @@ def create_app(config_name=None):
     
     # Register blueprints
     from .routes.license_routes import license_bp
+    from .routes.extraction_routes import extraction_bp
+    app.register_blueprint(extraction_bp, url_prefix="/api/v1/extraction")
     app.register_blueprint(license_bp, url_prefix='/api/v1/license')
     
     @app.route('/health')

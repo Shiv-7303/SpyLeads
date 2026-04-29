@@ -32,7 +32,6 @@ async function getInstallId() {
 
 async function getDeviceFingerprintPayload(licenseKey) {
   const install_id = await getInstallId();
-  // We can grab userAgent and timezone
   const user_agent = navigator.userAgent;
   const platform = navigator.userAgentData ? navigator.userAgentData.platform : navigator.platform;
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -78,22 +77,18 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'start-extraction') {
-    handleExtractionStart(request.tabId, request.count);
-    // Send immediate ack
-    sendResponse({ success: true, status: 'pending' });
+    handleExtractionStart(request.tabId, request.count, request.accountAgeDays).then(sendResponse);
+    return true; // Keep channel open for async response
   }
 });
 
 async function handleLicenseVerification(licenseKey) {
   try {
-    // Phase 1: Register/Check Device status
     const deviceResult = await registerDevice(licenseKey);
     if (!deviceResult.success) {
-       // It could be blocked!
        return { success: false, error: deviceResult.error || 'Device blocked.' };
     }
       
-    // Phase 2: Verify the License
     const deviceHash = deviceResult.device_hash;
     const response = await fetch(`${API_BASE_URL}/api/v1/license/verify-license`, {
       method: 'POST',
@@ -130,13 +125,48 @@ async function handleLicenseVerification(licenseKey) {
   }
 }
 
-function handleExtractionStart(tabId, count) {
-  chrome.tabs.sendMessage(tabId, { action: 'init-extraction', count }, (response) => {
+async function fetchExtractionPlan(requestedCount, accountAgeDays) {
+  const data = await chrome.storage.sync.get(['sessionToken']);
+  if (!data.sessionToken) {
+    return { success: false, error: 'Not authenticated. Verify license first.' };
+  }
+  
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/v1/extraction/generate-plan`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.sessionToken}`
+        },
+        body: JSON.stringify({
+            requested_count: requestedCount,
+            account_age_days: accountAgeDays
+        })
+    });
+    const result = await response.json();
+    return result;
+  } catch (err) {
+      console.error("Failed to fetch extraction plan", err);
+      return { success: false, error: "Network error fetching plan." };
+  }
+}
+
+async function handleExtractionStart(tabId, requestedCount, accountAgeDays) {
+  
+  const planResponse = await fetchExtractionPlan(requestedCount, accountAgeDays);
+  if (!planResponse.success) {
+      return planResponse; // Send error back to popup
+  }
+  
+  const plan = planResponse.plan;
+  
+  chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (response) => {
     if (chrome.runtime.lastError) {
       console.error("Content script not ready or error:", chrome.runtime.lastError);
-      // Could reinject content script here if needed
     } else {
-      console.log("Extraction initiated in tab", tabId);
+      console.log("Extraction initiated in tab", tabId, "with plan", plan);
     }
   });
+  
+  return { success: true, plan: plan };
 }

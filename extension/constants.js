@@ -30,3 +30,7 @@ export const SCHEDULER_CONFIG = {
   COOLDOWN_MIN: 300000, // 5 minutes in ms
   COOLDOWN_MAX: 600000 // 10 minutes in ms
 };
+
+export const IG_CONSTANTS = {
+  DEFAULT_ACCOUNT_AGE_DAYS: 7 // Assume warmed up by default unless specified
+};

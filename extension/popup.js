@@ -1,4 +1,4 @@
-import { PLANS, LIMITS } from './constants.js';
+import { PLANS, LIMITS, IG_CONSTANTS } from './constants.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Elements
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageContainer.style.color = isError ? 'var(--error)' : '#4caf50';
     setTimeout(() => {
       messageContainer.classList.add('hidden-element');
-    }, 5000);
+    }, 8000);
   }
 
   verifyBtn.addEventListener('click', () => {
@@ -104,9 +104,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   extractBtn.addEventListener('click', () => {
     extractBtn.disabled = true;
     const originalText = extractBtn.innerHTML;
-    extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> Extracting...';
+    extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> Generating Plan...';
     
-    // Trigger extraction in content script via background
+    // Check if on IG
     chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
       if(!tabs[0] || !tabs[0].url.includes("instagram.com")) {
         showMessage("Please navigate to Instagram first.");
@@ -118,7 +118,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       chrome.runtime.sendMessage({ 
         action: 'start-extraction', 
         count: parseInt(extractCountInput.value) || 10,
+        accountAgeDays: IG_CONSTANTS.DEFAULT_ACCOUNT_AGE_DAYS, // default for now unless we add an input
         tabId: tabs[0].id
+      }, (res) => {
+          if (res && res.success) {
+             const p = res.plan;
+             let m = `Extraction started! Est. duration: ${p.session_duration_minutes}m.`;
+             if (p.warm_up_message) m += ` Note: ${p.warm_up_message}`;
+             showMessage(m, false);
+             extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">pause</span> In Progress...';
+          } else {
+             showMessage(res?.error || "Failed to start extraction");
+             extractBtn.disabled = false;
+             extractBtn.innerHTML = originalText;
+          }
       });
     });
   });
