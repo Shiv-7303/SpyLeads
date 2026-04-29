@@ -34,6 +34,24 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
   });
 
+  // Listen for extraction updates
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'extraction-completed') {
+      extractBtn.disabled = false;
+      extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
+      showMessage('Extraction completed successfully!', false);
+
+      // Update quota
+      chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
+        updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
+      });
+    } else if (message.action === 'extraction-error') {
+      extractBtn.disabled = false;
+      extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
+      showMessage(message.error || 'Extraction failed.', true);
+    }
+  });
+
   // UI Updaters
   function updateUIForPlan(plan, quotaUsed, deviceCount = 1) {
     let limit = LIMITS.FREE_PLAN_LIMIT;
@@ -170,8 +188,6 @@ document.addEventListener('DOMContentLoaded', async () => {
               }
           });
       });
-    });
-  });
     });
   });
 });

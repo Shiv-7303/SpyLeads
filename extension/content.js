@@ -87,10 +87,9 @@ if (!window.__spyLeadsInjected) {
     }
 
     if (request.action === 'init-extraction') {
-        window._currentExtractionId = request.extractionId;
-        window._extractedProfiles = [];
+      window._currentExtractionId = request.extractionId;
+      window._extractedProfiles = [];
 
-    if (request.action === 'init-extraction') {
       if (!window.location.href.includes("instagram.com")) {
         sendResponse({ success: false, error: 'Not on Instagram' });
         return;
