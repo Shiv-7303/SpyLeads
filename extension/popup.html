@@ -1,1 +1,90 @@
-// Placeholder for extension popup
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpyLeads - Safe Instagram Extraction</title>
+  <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="spyleads-theme">
+  <div class="container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-container">
+        <h1>SpyLeads</h1>
+        <span id="plan-badge" class="badge badge-free">Free</span>
+      </div>
+      <div class="safety-indicator">
+        <span class="status-dot safe"></span>
+        <span class="status-text">Safe Mode ON</span>
+      </div>
+    </header>
+
+    <!-- Error/Success Messages -->
+    <div id="message-container" class="message hidden"></div>
+
+    <!-- License Section (Visible to Free Users initially) -->
+    <section id="license-section" class="section">
+      <label for="license-key">License Key</label>
+      <div class="input-group">
+        <input type="text" id="license-key" placeholder="Enter Gumroad License Key" autocomplete="off">
+        <button id="verify-license-btn" class="btn btn-secondary">Verify</button>
+      </div>
+      <div id="upgrade-link-container" class="upgrade-container hidden">
+        <p>Used 10/10 today? <a href="#" id="upgrade-link" target="_blank">Upgrade to Pro</a></p>
+      </div>
+    </section>
+
+    <!-- Quota Display Section -->
+    <section id="quota-section" class="section hidden">
+      <div class="quota-container">
+        <div class="quota-info">
+          <span>Daily Limit:</span>
+          <span id="quota-used">0</span> / <span id="quota-total">10</span>
+        </div>
+        <div class="progress-bar">
+          <div id="quota-progress" class="progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+      <div class="last-sync">Last synced: <span id="last-sync-time">-</span></div>
+    </section>
+
+    <!-- Extraction Section -->
+    <section id="extraction-section" class="section">
+      <div class="tabs">
+        <button class="tab active" data-target="hashtag">Hashtag</button>
+        <button class="tab" data-target="location">Location</button>
+      </div>
+      
+      <div id="hashtag-tab" class="tab-content active">
+        <input type="text" id="hashtag-input" placeholder="#instagram" class="full-width">
+      </div>
+      
+      <div id="location-tab" class="tab-content hidden">
+        <input type="text" id="location-input" placeholder="Search Location (e.g., New York)" class="full-width">
+      </div>
+
+      <div class="slider-container">
+        <label for="extract-count">Leads to Extract: <span id="extract-count-val">10</span></label>
+        <input type="range" id="extract-count" min="1" max="10" value="10">
+      </div>
+
+      <button id="extract-btn" class="btn btn-primary full-width" disabled>Extract Leads</button>
+    </section>
+
+    <!-- Action Section -->
+    <section id="actions-section" class="section">
+      <button id="export-csv-btn" class="btn btn-outline full-width" disabled>Export CSV (Pro)</button>
+    </section>
+
+    <!-- Settings/Help Footer -->
+    <footer class="footer">
+      <button id="settings-btn" class="icon-btn" title="Settings">⚙️</button>
+      <a href="#" class="help-link">Help & FAQ</a>
+    </footer>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
