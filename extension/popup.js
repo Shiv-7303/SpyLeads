@@ -14,11 +14,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   const extractCountInput = document.getElementById('extract-count');
 
   // Load state from storage
-  chrome.storage.sync.get(['plan', 'quotaUsed', 'licenseKey'], (data) => {
+  chrome.storage.sync.get(['plan', 'quotaUsed', 'licenseKey', 'deviceCount'], (data) => {
     const plan = data.plan || PLANS.FREE;
     const quotaUsed = data.quotaUsed || 0;
+    const deviceCount = data.deviceCount || 1;
     
-    updateUIForPlan(plan, quotaUsed);
+    updateUIForPlan(plan, quotaUsed, deviceCount);
     
     if (data.licenseKey && plan !== PLANS.FREE) {
       licenseInput.value = data.licenseKey;
@@ -26,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   // UI Updaters
-  function updateUIForPlan(plan, quotaUsed) {
+  function updateUIForPlan(plan, quotaUsed, deviceCount = 1) {
     let limit = LIMITS.FREE_PLAN_LIMIT;
     let badgeText = 'FREE';
     
@@ -55,7 +56,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const remaining = limit - quotaUsed;
-    planQuotaText.textContent = `Plan: ${badgeText}  |  Remaining: ${remaining}`;
+    let quotaText = `Plan: ${badgeText}  |  Remaining: ${remaining}`;
+    if (plan !== PLANS.FREE) {
+        quotaText += `  |  Device: ${deviceCount} of 1`;
+    }
+    planQuotaText.textContent = quotaText;
     
     extractCountInput.max = remaining;
     if(parseInt(extractCountInput.value) > parseInt(extractCountInput.max)) {
@@ -88,7 +93,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (response && response.success) {
         showMessage('License verified!', false);
-        updateUIForPlan(response.plan, response.quotaUsed || 0);
+        chrome.storage.sync.set({ deviceCount: response.deviceCount });
+        updateUIForPlan(response.plan, response.quotaUsed || 0, response.deviceCount);
       } else {
         showMessage(response?.error || 'Failed to verify license.');
       }

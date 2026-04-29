@@ -4,6 +4,7 @@ from datetime import datetime
 
 class License(db.Model):
     __tablename__ = 'licenses'
+    devices = db.relationship("Device", backref="license", lazy=True)
 
     id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     license_key = db.Column(db.String(100), unique=True, nullable=False, index=True)

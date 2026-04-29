@@ -21,15 +21,46 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
-async function getDeviceHash() {
-  // Simple deterministic hash based on static user agent data for device locking.
-  // In a real V3 extension, you might generate a UUID and store it in local storage.
-  const data = await chrome.storage.local.get(['device_id']);
-  if (data.device_id) return data.device_id;
+async function getInstallId() {
+  const data = await chrome.storage.local.get(['install_id']);
+  if (data.install_id) return data.install_id;
   
-  const newDeviceId = crypto.randomUUID();
-  await chrome.storage.local.set({ device_id: newDeviceId });
-  return newDeviceId;
+  const newInstallId = crypto.randomUUID();
+  await chrome.storage.local.set({ install_id: newInstallId });
+  return newInstallId;
+}
+
+async function getDeviceFingerprintPayload(licenseKey) {
+  const install_id = await getInstallId();
+  // We can grab userAgent and timezone
+  const user_agent = navigator.userAgent;
+  const platform = navigator.userAgentData ? navigator.userAgentData.platform : navigator.platform;
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  return {
+    license_key: licenseKey,
+    user_agent,
+    platform,
+    timezone,
+    install_id
+  };
+}
+
+async function registerDevice(licenseKey) {
+  try {
+      const payload = await getDeviceFingerprintPayload(licenseKey);
+      const response = await fetch(`${API_BASE_URL}/api/v1/license/register-device`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      
+      const result = await response.json();
+      return result;
+  } catch(e) {
+      console.error("Device registration network error", e);
+      return { success: false, error: 'Network error communicating with the server.' };
+  }
 }
 
 async function verifyStoredLicense() {
@@ -55,8 +86,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function handleLicenseVerification(licenseKey) {
   try {
-    const deviceHash = await getDeviceHash();
-    
+    // Phase 1: Register/Check Device status
+    const deviceResult = await registerDevice(licenseKey);
+    if (!deviceResult.success) {
+       // It could be blocked!
+       return { success: false, error: deviceResult.error || 'Device blocked.' };
+    }
+      
+    // Phase 2: Verify the License
+    const deviceHash = deviceResult.device_hash;
     const response = await fetch(`${API_BASE_URL}/api/v1/license/verify-license`, {
       method: 'POST',
       headers: {
@@ -77,7 +115,12 @@ async function handleLicenseVerification(licenseKey) {
         sessionToken: result.session_token,
         lastSync: Date.now() 
       });
-      return { success: true, plan: result.plan, quotaUsed: result.quota_remaining ? LIMITS[`${result.plan}_PLAN_LIMIT`] - result.quota_remaining : 0 };
+      return { 
+          success: true, 
+          plan: result.plan, 
+          quotaUsed: result.quota_remaining ? LIMITS[`${result.plan}_PLAN_LIMIT`] - result.quota_remaining : 0,
+          deviceCount: deviceResult.device_count || 1
+      };
     } else {
       return { success: false, error: result.error || 'Failed to verify license key.' };
     }

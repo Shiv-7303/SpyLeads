@@ -98,3 +98,83 @@ def verify_license():
         'quota_remaining': license_record.quota_remaining,
         'session_token': session_token
     }), 200
+
+from app.models.device import Device
+from app.utils.device_fingerprint import generate_device_hash
+
+@license_bp.route('/register-device', methods=['POST'])
+def register_device():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid request JSON'}), 400
+        
+    license_key = data.get('license_key')
+    user_agent = data.get('user_agent', '')
+    platform = data.get('platform', '')
+    timezone = data.get('timezone', '')
+    install_id = data.get('install_id')
+    
+    if not license_key or not install_id:
+        return jsonify({'error': 'license_key and install_id are required'}), 400
+        
+    license_record = License.query.filter_by(license_key=license_key).first()
+    if not license_record:
+        return jsonify({'error': 'License not found. Please verify it first.'}), 404
+        
+    device_hash = generate_device_hash(user_agent, platform, timezone, install_id)
+    
+    existing_device = Device.query.filter_by(license_id=license_record.id, device_hash=device_hash).first()
+    
+    if existing_device:
+        existing_device.last_seen = datetime.utcnow()
+        db.session.commit()
+        return jsonify({
+            'success': True, 
+            'device_hash': device_hash, 
+            'device_status': existing_device.device_status,
+            'device_count': license_record.device_count
+        }), 200
+        
+    # Check limits
+    current_device_count = Device.query.filter_by(license_id=license_record.id).count()
+    
+    device_status = 'allowed'
+    if current_device_count >= 1:
+        device_status = 'blocked'
+    
+    new_device = Device(
+        license_id=license_record.id,
+        device_hash=device_hash,
+        user_agent=user_agent,
+        platform=platform,
+        timezone=timezone,
+        install_id=install_id,
+        device_status=device_status
+    )
+    
+    if device_status == 'allowed':
+        license_record.device_count += 1
+        
+        # update legacy json list just in case
+        hashes = license_record.device_hash_list or []
+        if device_hash not in hashes:
+            hashes.append(device_hash)
+            license_record.device_hash_list = hashes
+
+    db.session.add(new_device)
+    db.session.commit()
+    
+    if device_status == 'blocked':
+        return jsonify({
+            'success': False,
+            'error': 'Device limit reached (max 1 device per license).',
+            'device_status': device_status,
+            'device_hash': device_hash
+        }), 403
+        
+    return jsonify({
+        'success': True,
+        'device_status': device_status,
+        'device_hash': device_hash,
+        'device_count': license_record.device_count
+    }), 200
