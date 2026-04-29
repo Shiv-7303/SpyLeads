@@ -88,6 +88,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       return false; // synchronous
   }
   
+  if (request.action === "content-log") {
+      console.log("[Content Script]:", request.message, request.obj || "");
+      return false;
+  }
+
   if (request.action === 'extraction-completed') {
       activeExtractionTabId = null;
       sendResponse({ success: true });

@@ -1,10 +1,71 @@
 if (!window.__spyLeadsInjected) {
   window.__spyLeadsInjected = true;
-  console.log("SpyLeads Content Script Loaded.");
+  
+  const bgLog = (msg, obj) => {
+      console.log(msg, obj || "");
+      chrome.runtime.sendMessage({ action: 'content-log', message: msg, obj: obj });
+  };
+
+  bgLog("SpyLeads Content Script Loaded.");
 
   let isExtracting = false;
   let extractionPlan = null;
   let currentExtracted = 0;
+  let floatUI = null;
+
+  function createFloatingUI() {
+      if(floatUI) return floatUI;
+      
+      floatUI = document.createElement('div');
+      floatUI.style.position = 'fixed';
+      floatUI.style.bottom = '20px';
+      floatUI.style.left = '20px';
+      floatUI.style.backgroundColor = '#b7004f'; // Primary color
+      floatUI.style.color = '#ffffff';
+      floatUI.style.padding = '12px 20px';
+      floatUI.style.borderRadius = '8px';
+      floatUI.style.fontFamily = 'system-ui, sans-serif';
+      floatUI.style.fontSize = '14px';
+      floatUI.style.fontWeight = 'bold';
+      floatUI.style.zIndex = '9999999';
+      floatUI.style.boxShadow = '0 4px 6px rgba(0,0,0,0.3)';
+      floatUI.style.display = 'flex';
+      floatUI.style.alignItems = 'center';
+      floatUI.style.gap = '10px';
+      
+      const spinner = document.createElement('div');
+      spinner.style.width = '16px';
+      spinner.style.height = '16px';
+      spinner.style.border = '3px solid rgba(255,255,255,0.3)';
+      spinner.style.borderTop = '3px solid white';
+      spinner.style.borderRadius = '50%';
+      spinner.animate([
+          { transform: 'rotate(0deg)' },
+          { transform: 'rotate(360deg)' }
+      ], { duration: 1000, iterations: Infinity });
+      
+      const text = document.createElement('span');
+      text.id = 'spyleads-float-text';
+      text.innerText = 'SpyLeads: Initializing...';
+      
+      floatUI.appendChild(spinner);
+      floatUI.appendChild(text);
+      document.body.appendChild(floatUI);
+      return floatUI;
+  }
+  
+  function updateFloatingUI(message) {
+      if(!floatUI) createFloatingUI();
+      const text = document.getElementById('spyleads-float-text');
+      if(text) text.innerText = message;
+  }
+  
+  function removeFloatingUI() {
+      if(floatUI) {
+          floatUI.remove();
+          floatUI = null;
+      }
+  }
 
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'init-extraction') {
@@ -18,11 +79,12 @@ if (!window.__spyLeadsInjected) {
         return;
       }
       
-      console.log(`Starting extraction sequence...`, request.plan);
+      bgLog(`Starting extraction sequence...`);
       isExtracting = true;
       extractionPlan = request.plan;
       currentExtracted = 0;
       
+      createFloatingUI();
       executeExtractionPlan();
       
       sendResponse({ success: true, status: 'started' });
@@ -49,26 +111,31 @@ if (!window.__spyLeadsInjected) {
       let profilesInCurrentBatch = 0;
       
       while(currentExtracted < totalToExtract) {
-          console.log(`--- Extracting profile ${currentExtracted + 1} of ${totalToExtract} ---`);
+          const statusPrefix = `SpyLeads [${currentExtracted + 1}/${totalToExtract}]:`;
+          bgLog(`--- Extracting profile ${currentExtracted + 1} of ${totalToExtract} ---`);
           
           // Simulating 1. Scroll to profile
           let delay = getRandomDelay(delays.scroll[0], delays.scroll[1]);
-          console.log(`Scrolling... waiting ${delay/1000}s`);
+          bgLog(`Scrolling... waiting ${delay/1000}s`);
+          updateFloatingUI(`${statusPrefix} Scrolling... (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
           
           // Simulating 3. Hover & Pause
           delay = getRandomDelay(2, 5);
-          console.log(`Hovering... waiting ${delay/1000}s`);
+          bgLog(`Hovering... waiting ${delay/1000}s`);
+          updateFloatingUI(`${statusPrefix} Hovering... (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
           
           // Simulating 5. Click Profile & Wait to load
           delay = getRandomDelay(delays.profile_open[0], delays.profile_open[1]);
-          console.log(`Opening profile... waiting ${delay/1000}s`);
+          bgLog(`Opening profile... waiting ${delay/1000}s`);
+          updateFloatingUI(`${statusPrefix} Loading profile... (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
           
           // Simulating 7. Extract Data
           delay = getRandomDelay(delays.extraction[0], delays.extraction[1]);
-          console.log(`Extracting data... waiting ${delay/1000}s`);
+          bgLog(`Extracting data... waiting ${delay/1000}s`);
+          updateFloatingUI(`${statusPrefix} Extracting... (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
           
           currentExtracted++;
@@ -77,7 +144,8 @@ if (!window.__spyLeadsInjected) {
           // Check batch completion limits
           if (profilesInCurrentBatch >= batchSize && currentExtracted < totalToExtract) {
                const pauseDurationSec = pauses[currentBatch] || 120;
-               console.log(`=== BATCH COMPLETE. Safe Scheduler initiating cooldown for ${pauseDurationSec} seconds ===`);
+               bgLog(`=== BATCH COMPLETE. Safe Scheduler initiating cooldown for ${pauseDurationSec} seconds ===`);
+               updateFloatingUI(`SpyLeads Cooldown... (${pauseDurationSec}s left)`);
                await sleep(pauseDurationSec * 1000);
                
                profilesInCurrentBatch = 0;
@@ -86,16 +154,19 @@ if (!window.__spyLeadsInjected) {
           
           // Deep scroll pagination bounds check
           if (currentExtracted % 25 === 0 && currentExtracted < totalToExtract && profilesInCurrentBatch !== 0) {
-              // Additional cooldown to prevent fast deep pagination as per PRD
               const scrollCooldown = getRandomDelay(300, 600); // 5-10 minutes
-              console.log(`=== DEEP SCROLL LIMIT REACHED. Additional cooldown for ${scrollCooldown/1000} seconds ===`);
+              bgLog(`=== DEEP SCROLL LIMIT REACHED. Additional cooldown for ${scrollCooldown/1000} seconds ===`);
+              updateFloatingUI(`SpyLeads Scroll Cooldown... (${Math.round(scrollCooldown/1000)}s left)`);
               await sleep(scrollCooldown);
           }
       }
       
-      console.log("=== EXTRACTION COMPLETE ===");
+      bgLog("=== EXTRACTION COMPLETE ===");
       isExtracting = false;
       extractionPlan = null;
+      
+      updateFloatingUI(`SpyLeads: Extraction Complete! ✓`);
+      setTimeout(removeFloatingUI, 5000);
       
       // Notify background that extraction finished
       chrome.runtime.sendMessage({ action: 'extraction-completed' });
