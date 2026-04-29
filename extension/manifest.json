@@ -9,6 +9,10 @@
     "scripting",
     "alarms"
   ],
+  "host_permissions": [
+    "https://www.instagram.com/*",
+    "https://instagram.com/*"
+  ],
   "background": {
     "service_worker": "background.js",
     "type": "module"
