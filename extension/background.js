@@ -151,22 +151,54 @@ async function fetchExtractionPlan(requestedCount, accountAgeDays) {
   }
 }
 
+function executeContentScriptAndMessage(tabId, plan) {
+    return new Promise((resolve) => {
+        chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (response) => {
+            if (chrome.runtime.lastError) {
+              console.log("Injecting content script dynamically because it wasn't ready.");
+              
+              // Dynamically inject the script if it wasn't already loaded by manifest
+              chrome.scripting.executeScript({
+                  target: { tabId: tabId },
+                  files: ['content.js']
+              }, () => {
+                  if (chrome.runtime.lastError) {
+                      console.error("Failed to inject script: ", chrome.runtime.lastError);
+                      resolve(false);
+                      return;
+                  }
+                  
+                  // Try sending the message again after successful injection
+                  chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (retryResponse) => {
+                      if (chrome.runtime.lastError) {
+                          console.error("Still failed after injection: ", chrome.runtime.lastError);
+                          resolve(false);
+                      } else {
+                          console.log("Extraction initiated in tab after injection", tabId);
+                          resolve(true);
+                      }
+                  });
+              });
+            } else {
+              console.log("Extraction initiated in tab", tabId);
+              resolve(true);
+            }
+        });
+    });
+}
+
 async function handleExtractionStart(tabId, requestedCount, accountAgeDays) {
-  
   const planResponse = await fetchExtractionPlan(requestedCount, accountAgeDays);
   if (!planResponse.success) {
       return planResponse; // Send error back to popup
   }
   
   const plan = planResponse.plan;
+  const scriptSuccess = await executeContentScriptAndMessage(tabId, plan);
   
-  chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (response) => {
-    if (chrome.runtime.lastError) {
-      console.error("Content script not ready or error:", chrome.runtime.lastError);
-    } else {
-      console.log("Extraction initiated in tab", tabId, "with plan", plan);
-    }
-  });
+  if (!scriptSuccess) {
+      return { success: false, error: "Failed to connect to Instagram page. Try refreshing the tab." };
+  }
   
   return { success: true, plan: plan };
 }
