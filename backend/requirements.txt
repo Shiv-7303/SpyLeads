@@ -1,0 +1,17 @@
+# Flask
+Flask>=3.0.0
+Flask-SQLAlchemy
+SQLAlchemy>=2.0.0
+Flask-Migrate
+alembic
+python-dotenv
+bcrypt
+pytz
+requests
+sentry-sdk
+python-json-logger
+gunicorn
+pytest
+psycopg2-binary
+PyJWT>=2.8.0
+Flask-CORS>=4.0.0

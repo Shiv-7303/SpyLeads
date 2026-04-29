@@ -1,0 +1,4 @@
+# .gitignore for extension
+node_modules/
+dist/
+.env

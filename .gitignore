@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.env.*
+instance/
+.webassets-cache
+*.sqlite3
+*.db
+*.log
+migrations/
+venv
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Extension
+extension/node_modules/
+extension/dist/
+extension/.env

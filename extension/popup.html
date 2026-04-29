@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SpyLeads</title>
+<link href="popup.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+</head>
+<body class="bg-surface-dim min-h-screen flex items-center justify-center p-0 m-0 w-[380px]">
+<!-- Extension Popup Container -->
+<main class="w-[380px] h-[520px] bg-background shadow-lg flex flex-col overflow-hidden relative">
+<!-- HEADER -->
+<header class="flex flex-col gap-xs p-container-padding bg-surface border-b border-surface-variant shrink-0">
+<div class="flex items-center justify-between">
+    <div class="flex items-center gap-sm">
+        <div class="w-8 h-8 rounded-full bg-primary-fixed flex items-center justify-center shrink-0">
+            <span class="material-symbols-outlined text-primary text-[18px]">dataset</span>
+        </div>
+        <h1 class="font-heading text-heading text-on-surface">SpyLeads Pro</h1>
+    </div>
+    <span id="plan-badge" class="bg-surface-variant text-on-surface-variant px-2 py-0.5 rounded-full font-label text-helper uppercase tracking-wide">
+        FREE
+    </span>
+</div>
+<div class="font-helper text-helper text-on-surface-variant pl-10" id="plan-quota-text">
+    Plan: FREE  |  Remaining: 10
+</div>
+<div id="message-container" class="hidden-element font-helper text-helper pl-10 mt-1"></div>
+</header>
+<!-- SCROLLABLE CONTENT -->
+<div class="flex-1 overflow-y-auto p-container-padding flex flex-col gap-lg">
+<!-- INPUTS -->
+<section class="flex flex-col gap-gutter">
+<!-- Niche Hashtags -->
+<div class="flex flex-col gap-xs">
+    <label class="font-label text-label text-on-surface">Niche Hashtags</label>
+    <div class="border border-surface-variant rounded-lg bg-surface-container-lowest px-sm py-2 flex items-center gap-xs focus-within:border-secondary focus-within:ring-1 focus-within:ring-secondary transition-shadow">
+        <span class="material-symbols-outlined text-outline-variant text-[18px]">tag</span>
+        <input id="hashtag-input" class="flex-1 bg-transparent border-none p-0 focus:ring-0 font-body text-body text-on-surface placeholder:text-outline w-full" placeholder="e.g., fitness, coach" type="text"/>
+    </div>
+    <p class="font-helper text-helper text-outline">1 hashtag max</p>
+</div>
+
+<!-- Location Hashtags -->
+<div class="flex flex-col gap-xs">
+    <label class="font-label text-label text-on-surface">Location Hashtags (optional)</label>
+    <div class="border border-surface-variant rounded-lg bg-surface-container-lowest px-sm py-2 flex items-center gap-xs focus-within:border-secondary focus-within:ring-1 focus-within:ring-secondary transition-shadow">
+        <span class="material-symbols-outlined text-outline-variant text-[18px]">location_on</span>
+        <input id="location-input" class="flex-1 bg-transparent border-none p-0 focus:ring-0 font-body text-body text-on-surface placeholder:text-outline w-full" placeholder="e.g., newyork, london" type="text"/>
+    </div>
+</div>
+
+<!-- Follower Range (Reused for Extract count slider logic mapping conceptually) -->
+<div class="flex flex-col gap-xs">
+    <label class="font-label text-label text-on-surface">Leads to Extract</label>
+    <div class="flex items-center gap-sm">
+        <div class="flex-1 border border-surface-variant rounded-lg bg-surface-container-lowest px-sm py-2 flex items-center gap-xs focus-within:border-secondary focus-within:ring-1 focus-within:ring-secondary transition-shadow">
+            <span class="material-symbols-outlined text-outline-variant text-[16px]">group</span>
+            <input id="extract-count" class="flex-1 bg-transparent border-none p-0 focus:ring-0 font-body text-body text-on-surface w-full" type="number" value="10" min="1" max="10"/>
+        </div>
+    </div>
+</div>
+</section>
+
+<!-- ACTION -->
+<div class="pt-sm pb-md flex flex-col gap-2">
+    <button id="extract-btn" class="w-full bg-primary text-on-primary font-label text-label py-md px-container-padding rounded-lg flex items-center justify-center gap-sm shadow-sm hover:opacity-90 transition-opacity">
+        <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+        Extract Profiles
+    </button>
+    <button id="export-csv-btn" class="w-full bg-surface-variant text-on-surface font-label text-label py-md px-container-padding rounded-lg flex items-center justify-center gap-sm shadow-sm hover:opacity-90 transition-opacity" disabled>
+        <span class="material-symbols-outlined text-[20px]">download</span>
+        Export CSV (Pro)
+    </button>
+</div>
+
+<!-- LICENSE -->
+<div id="license-section" class="mt-auto bg-surface-container-low border border-surface-variant rounded-lg p-md flex flex-col gap-sm">
+    <label class="font-label text-label text-on-surface flex items-center gap-xs">
+        <span class="text-[14px]">🔑</span> Have a license key?
+    </label>
+    <div class="flex items-center gap-sm">
+        <div class="flex-1 border border-surface-variant rounded-lg bg-surface-container-lowest px-sm py-1.5 focus-within:border-secondary focus-within:ring-1 focus-within:ring-secondary transition-shadow">
+            <input id="license-key" class="w-full bg-transparent border-none p-0 focus:ring-0 font-body text-body text-on-surface placeholder:text-outline tracking-widest" type="password" placeholder="Key"/>
+        </div>
+        <button id="verify-license-btn" class="bg-surface-container-highest text-on-surface font-label text-label px-md py-2 rounded-lg hover:bg-surface-dim transition-colors border border-outline-variant shrink-0">
+            Activate
+        </button>
+    </div>
+</div>
+</div>
+</main>
+<script type="module" src="popup.js"></script>
+</body>
+</html>
