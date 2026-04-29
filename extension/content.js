@@ -96,5 +96,10 @@ if (!window.__spyLeadsInjected) {
       console.log("=== EXTRACTION COMPLETE ===");
       isExtracting = false;
       extractionPlan = null;
+      
+      // Notify background that extraction finished
+      chrome.runtime.sendMessage({ action: 'extraction-completed' });
   }
+} else {
+    console.log("SpyLeads script was already injected.");
 }

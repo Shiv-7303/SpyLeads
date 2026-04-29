@@ -25,6 +25,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       licenseInput.value = data.licenseKey;
     }
   });
+  
+  // Check if extraction is currently active
+  chrome.runtime.sendMessage({ action: 'get-extraction-status' }, (response) => {
+      if (response && response.isExtracting) {
+          extractBtn.disabled = true;
+          extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
+      }
+  });
 
   // UI Updaters
   function updateUIForPlan(plan, quotaUsed, deviceCount = 1) {
@@ -126,7 +134,7 @@ document.addEventListener('DOMContentLoaded', async () => {
              let m = `Extraction started! Est. duration: ${p.session_duration_minutes}m.`;
              if (p.warm_up_message) m += ` Note: ${p.warm_up_message}`;
              showMessage(m, false);
-             extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">pause</span> In Progress...';
+             extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
           } else {
              showMessage(res?.error || "Failed to start extraction");
              extractBtn.disabled = false;

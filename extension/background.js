@@ -1,5 +1,7 @@
 import { API_BASE_URL, PLANS, LIMITS } from './constants.js';
 
+let activeExtractionTabId = null;
+
 // Initialization
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.sync.get(['plan', 'quotaUsed', 'lastSync'], (data) => {
@@ -80,6 +82,24 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     handleExtractionStart(request.tabId, request.count, request.accountAgeDays).then(sendResponse);
     return true; // Keep channel open for async response
   }
+  
+  if (request.action === 'get-extraction-status') {
+      sendResponse({ isExtracting: activeExtractionTabId !== null, tabId: activeExtractionTabId });
+      return false; // synchronous
+  }
+  
+  if (request.action === 'extraction-completed') {
+      activeExtractionTabId = null;
+      sendResponse({ success: true });
+      return false;
+  }
+});
+
+// Clean up state if tab is closed
+chrome.tabs.onRemoved.addListener((tabId) => {
+    if (tabId === activeExtractionTabId) {
+        activeExtractionTabId = null;
+    }
 });
 
 async function handleLicenseVerification(licenseKey) {
@@ -151,24 +171,27 @@ async function fetchExtractionPlan(requestedCount, accountAgeDays) {
   }
 }
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
 function executeContentScriptAndMessage(tabId, plan) {
     return new Promise((resolve) => {
         chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (response) => {
             if (chrome.runtime.lastError) {
               console.log("Injecting content script dynamically because it wasn't ready.");
               
-              // Dynamically inject the script if it wasn't already loaded by manifest
               chrome.scripting.executeScript({
                   target: { tabId: tabId },
                   files: ['content.js']
-              }, () => {
+              }, async () => {
                   if (chrome.runtime.lastError) {
                       console.error("Failed to inject script: ", chrome.runtime.lastError);
                       resolve(false);
                       return;
                   }
                   
-                  // Try sending the message again after successful injection
+                  // Wait a brief moment for the script execution context to fully parse
+                  await sleep(500);
+                  
                   chrome.tabs.sendMessage(tabId, { action: 'init-extraction', plan: plan }, (retryResponse) => {
                       if (chrome.runtime.lastError) {
                           console.error("Still failed after injection: ", chrome.runtime.lastError);
@@ -200,5 +223,6 @@ async function handleExtractionStart(tabId, requestedCount, accountAgeDays) {
       return { success: false, error: "Failed to connect to Instagram page. Try refreshing the tab." };
   }
   
+  activeExtractionTabId = tabId;
   return { success: true, plan: plan };
 }
