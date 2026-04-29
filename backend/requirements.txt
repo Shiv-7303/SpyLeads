@@ -13,3 +13,4 @@ python-json-logger
 gunicorn
 pytest
 psycopg2-binary
+PyJWT>=2.8.0

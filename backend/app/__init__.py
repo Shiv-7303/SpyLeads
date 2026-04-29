@@ -1,19 +1,30 @@
-import os
-from flask import Flask
+from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+import os
 from dotenv import load_dotenv
+
+from .config import config
 
 db = SQLAlchemy()
 migrate = Migrate()
 
-
 def create_app(config_name=None):
-    load_dotenv()
+    if config_name is None:
+        config_name = os.environ.get('FLASK_ENV', 'default')
+
     app = Flask(__name__)
-    config_name = config_name or os.getenv('FLASK_ENV', 'development')
-    app.config.from_object(f'app.config.{config_name.capitalize()}Config')
+    app.config.from_object(config[config_name])
+
     db.init_app(app)
     migrate.init_app(app, db)
-    # Register blueprints here
+    
+    # Register blueprints
+    from .routes.license_routes import license_bp
+    app.register_blueprint(license_bp, url_prefix='/api/v1/license')
+    
+    @app.route('/health')
+    def health_check():
+        return jsonify({"status": "healthy"}), 200
+
     return app

@@ -21,11 +21,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   }
 });
 
+async function getDeviceHash() {
+  // Simple deterministic hash based on static user agent data for device locking.
+  // In a real V3 extension, you might generate a UUID and store it in local storage.
+  const data = await chrome.storage.local.get(['device_id']);
+  if (data.device_id) return data.device_id;
+  
+  const newDeviceId = crypto.randomUUID();
+  await chrome.storage.local.set({ device_id: newDeviceId });
+  return newDeviceId;
+}
+
 async function verifyStoredLicense() {
   const data = await chrome.storage.sync.get(['licenseKey']);
   if (data.licenseKey) {
-    // In real implementation, ping backend API
-    console.log("Checking license periodically for:", data.licenseKey);
+    handleLicenseVerification(data.licenseKey);
   }
 }
 
@@ -45,23 +55,35 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function handleLicenseVerification(licenseKey) {
   try {
-    // MOCK API CALL - Replace with real fetch to API_BASE_URL
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const deviceHash = await getDeviceHash();
     
-    // Simulate simple verification
-    if (licenseKey.startsWith('PRO_PLUS')) {
-      const plan = PLANS.PRO_PLUS;
-      await chrome.storage.sync.set({ plan, licenseKey, lastSync: Date.now() });
-      return { success: true, plan };
-    } else if (licenseKey.startsWith('PRO')) {
-      const plan = PLANS.PRO;
-      await chrome.storage.sync.set({ plan, licenseKey, lastSync: Date.now() });
-      return { success: true, plan };
+    const response = await fetch(`${API_BASE_URL}/api/v1/license/verify-license`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        license_key: licenseKey,
+        device_hash: deviceHash
+      })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      await chrome.storage.sync.set({ 
+        plan: result.plan, 
+        licenseKey: licenseKey,
+        sessionToken: result.session_token,
+        lastSync: Date.now() 
+      });
+      return { success: true, plan: result.plan, quotaUsed: result.quota_remaining ? LIMITS[`${result.plan}_PLAN_LIMIT`] - result.quota_remaining : 0 };
     } else {
-      return { success: false, error: 'Invalid license key format.' };
+      return { success: false, error: result.error || 'Failed to verify license key.' };
     }
   } catch (error) {
-    return { success: false, error: 'Network error verifying license.' };
+    console.error("Verification network error", error);
+    return { success: false, error: 'Network error communicating with the server.' };
   }
 }
 

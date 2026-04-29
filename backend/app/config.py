@@ -17,3 +17,10 @@ class ProductionConfig(Config):
 class TestConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = 'sqlite:///:memory:'
+
+config = {
+    'development': DevelopmentConfig,
+    'testing': TestConfig,
+    'production': ProductionConfig,
+    'default': DevelopmentConfig
+}
