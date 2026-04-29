@@ -1,7 +1,9 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from app.models.license import License
+from app.models.device import Device
 from app.utils.gumroad_api import verify_gumroad_license
+from app.utils.device_fingerprint import generate_device_hash
 from app.utils.token import generate_session_token
 from app import db
 
@@ -13,26 +15,13 @@ PLAN_LIMITS = {
     'PRO_PLUS': {'daily': 250, 'hourly': 40}
 }
 
-@license_bp.route('/verify-license', methods=['POST'])
-def verify_license():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid request JSON'}), 400
-        
-    license_key = data.get('license_key')
-    device_hash = data.get('device_hash', 'unknown_device')
-    
-    if not license_key:
-        return jsonify({'error': 'License key is required'}), 400
-
-    # 1. Fetch license from DB
+def get_or_create_license(license_key):
     license_record = License.query.filter_by(license_key=license_key).first()
     
-    # 2. Check with Gumroad if not in DB or if it's been a while (mocked dynamic logic)
     gumroad_data = verify_gumroad_license(license_key, None)
     
     if not gumroad_data['success']:
-        return jsonify({'error': gumroad_data['error']}), 403
+        return None, gumroad_data['error']
         
     plan = gumroad_data['plan']
     status = gumroad_data['status']
@@ -41,7 +30,7 @@ def verify_license():
         if license_record:
             license_record.status = status
             db.session.commit()
-        return jsonify({'error': f'License is {status}'}), 403
+        return None, f'License is {status}'
 
     if not license_record:
         # Create new license
@@ -65,6 +54,28 @@ def verify_license():
     license_record.plan = plan
     license_record.daily_limit = limits['daily']
     license_record.hourly_limit = limits['hourly']
+    license_record.last_check_timestamp = datetime.utcnow()
+    
+    db.session.commit()
+    
+    return license_record, None
+
+
+@license_bp.route('/verify-license', methods=['POST'])
+def verify_license():
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'Invalid request JSON'}), 400
+        
+    license_key = data.get('license_key')
+    device_hash = data.get('device_hash', 'unknown_device')
+    
+    if not license_key:
+        return jsonify({'error': 'License key is required'}), 400
+
+    license_record, err = get_or_create_license(license_key)
+    if err:
+        return jsonify({'error': err}), 403
 
     # 3. Check Device Limits (Max 1 device)
     current_devices = license_record.device_hash_list or []
@@ -76,15 +87,13 @@ def verify_license():
         current_devices.append(device_hash)
         license_record.device_hash_list = current_devices
         license_record.device_count = len(current_devices)
-
-    license_record.last_check_timestamp = datetime.utcnow()
-    db.session.commit()
+        db.session.commit()
     
     # 4. Generate Session Token
     session_token = generate_session_token(
         license_key=license_key,
         device_hash=device_hash,
-        plan=plan,
+        plan=license_record.plan,
         daily_limit=license_record.daily_limit,
         hourly_limit=license_record.hourly_limit,
         quota_remaining=license_record.quota_remaining
@@ -92,15 +101,12 @@ def verify_license():
     
     return jsonify({
         'success': True,
-        'plan': plan,
+        'plan': license_record.plan,
         'daily_limit': license_record.daily_limit,
         'hourly_limit': license_record.hourly_limit,
         'quota_remaining': license_record.quota_remaining,
         'session_token': session_token
     }), 200
-
-from app.models.device import Device
-from app.utils.device_fingerprint import generate_device_hash
 
 @license_bp.route('/register-device', methods=['POST'])
 def register_device():
@@ -117,9 +123,9 @@ def register_device():
     if not license_key or not install_id:
         return jsonify({'error': 'license_key and install_id are required'}), 400
         
-    license_record = License.query.filter_by(license_key=license_key).first()
-    if not license_record:
-        return jsonify({'error': 'License not found. Please verify it first.'}), 404
+    license_record, err = get_or_create_license(license_key)
+    if err:
+        return jsonify({'error': err}), 403
         
     device_hash = generate_device_hash(user_agent, platform, timezone, install_id)
     
