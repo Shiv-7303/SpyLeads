@@ -339,26 +339,12 @@ async function extractProfileInBackground(username, mainTabId) {
     
     console.log(`[EXTRACT] Opened profile tab: ${profileTab.id} for ${username}`);
     
-<<<<<<< Updated upstream
-    // Step 2: Inject content script
-    try {
-        await waitForTabReady(profileTab.id);
-        
-        await chrome.scripting.executeScript({
-            target: { tabId: profileTab.id },
-            files: ['content.js']
-        });
-        
-        // Brief pause for script evaluation
-        await sleep(500);
-=======
     // Step 2: Wait for tab and send message
     try {
         await waitForTabReady(profileTab.id);
         
         // Brief pause to allow content script (auto-injected via manifest) to initialize
         await sleep(1000);
->>>>>>> Stashed changes
         
         // Step 3: Send message to extract profile data
         const profileData = await new Promise((resolve) => {

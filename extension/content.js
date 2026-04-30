@@ -72,16 +72,6 @@ if (!window.__spyLeadsInjected) {
         const username = request.username;
         bgLog(`Extracting profile data directly from DOM for ${username}`);
         
-<<<<<<< Updated upstream
-        // This is where DOM constants and selectors go. For now, dummy data since we can't reliably load IG in Sandbox.
-        const profileData = {
-           username: username,
-           full_name: document.title || username,
-           followers: "10K",
-           following: "500",
-           bio: "Sample bio",
-           timestamp: new Date().toISOString()
-=======
         const safeText = (selector) => {
             const el = document.querySelector(selector);
             return el ? el.innerText.trim() : "";
@@ -124,7 +114,6 @@ if (!window.__spyLeadsInjected) {
            is_verified: !!document.querySelector('svg[aria-label="Verified"]'),
            timestamp: new Date().toISOString(),
            profile_url: window.location.href
->>>>>>> Stashed changes
         };
         
         sendResponse(profileData);
@@ -233,39 +222,15 @@ if (!window.__spyLeadsInjected) {
           // Option A: Extract profile data via background script -> New Tab
           updateFloatingUI(`${statusPrefix} Extracting ${targetUsername}...`);
           
-<<<<<<< Updated upstream
-          
-          // Option A: Extract profile data via background script -> New Tab
-          // For now, we simulate getting username and sending it to background
-          const username = "dummy_user_" + currentExtracted; 
-          bgLog(`Requesting background extraction for ${username}...`);
-          updateFloatingUI(`${statusPrefix} Extracting ${username}...`);
-          
-=======
->>>>>>> Stashed changes
           try {
              const profileData = await new Promise((resolve) => {
                  chrome.runtime.sendMessage({
                      action: 'extract-profile-background',
-<<<<<<< Updated upstream
-                     username: username
-=======
                      username: targetUsername
->>>>>>> Stashed changes
                  }, resolve);
              });
              bgLog("Extracted data:", profileData);
              
-<<<<<<< Updated upstream
-             // Log progress to DB every time a profile is found
-             chrome.runtime.sendMessage({
-                 action: 'log-extraction-progress',
-                 extractionId: request.extractionId || window._currentExtractionId,
-                 profilesFound: currentExtracted,
-                 profilesData: window._extractedProfiles || [],
-                 status: 'in_progress'
-             });
-=======
              if (profileData && profileData.username) {
                  window._extractedProfiles.push(profileData);
                  currentExtracted++;
@@ -280,17 +245,11 @@ if (!window.__spyLeadsInjected) {
                      status: 'in_progress'
                  });
              }
->>>>>>> Stashed changes
           } catch(e) {
              bgLog("Error in background extraction:", e);
           }
 
-<<<<<<< Updated upstream
-          
-          // Simulating 7. Extract Data
-=======
           // Simulating 7. Extract Data / Safety Delay
->>>>>>> Stashed changes
           delay = getRandomDelay(delays.extraction[0], delays.extraction[1]);
           updateFloatingUI(`${statusPrefix} Safety Pause (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);

@@ -34,11 +34,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
   });
   
-<<<<<<< Updated upstream
-=======
   let lastExtractedProfiles = [];
 
->>>>>>> Stashed changes
   // Listen for extraction updates
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'extraction-completed') {
@@ -46,13 +43,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
       showMessage('Extraction completed successfully!', false);
       
-<<<<<<< Updated upstream
-=======
       if (message.profiles) {
           lastExtractedProfiles = message.profiles;
       }
       
->>>>>>> Stashed changes
       // Update quota
       chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
         updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
@@ -63,8 +57,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       showMessage(message.error || 'Extraction failed.', true);
     }
   });
-<<<<<<< Updated upstream
-=======
 
   exportCsvBtn.addEventListener('click', () => {
       if (lastExtractedProfiles.length === 0) {
@@ -111,7 +103,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       URL.revokeObjectURL(url);
   });
->>>>>>> Stashed changes
 
   // UI Updaters
   function updateUIForPlan(plan, quotaUsed, deviceCount = 1) {
