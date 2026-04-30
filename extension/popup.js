@@ -34,12 +34,18 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
   });
 
+  let lastExtractedProfiles = [];
+
   // Listen for extraction updates
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'extraction-completed') {
       extractBtn.disabled = false;
       extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
       showMessage('Extraction completed successfully!', false);
+
+      if (message.profiles) {
+          lastExtractedProfiles = message.profiles;
+      }
 
       // Update quota
       chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
@@ -50,6 +56,52 @@ document.addEventListener('DOMContentLoaded', async () => {
       extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
       showMessage(message.error || 'Extraction failed.', true);
     }
+  });
+
+  exportCsvBtn.addEventListener('click', () => {
+      if (lastExtractedProfiles.length === 0) {
+          showMessage('No leads extracted yet.');
+          return;
+      }
+
+      // Convert to CSV
+      const headers = ['Username', 'Full Name', 'Followers', 'Following', 'Verified', 'Bio', 'Profile URL', 'Extracted At'];
+      const csvRows = [headers.join(',')];
+
+      for (const profile of lastExtractedProfiles) {
+          // Escape quotes and commas in bio/names
+          const escapeCsv = (str) => {
+              if (str === null || str === undefined) return '""';
+              const strVal = String(str);
+              if (strVal.includes(',') || strVal.includes('"') || strVal.includes('\n')) {
+                  return `"${strVal.replace(/"/g, '""')}"`;
+              }
+              return strVal;
+          };
+
+          const row = [
+              escapeCsv(profile.username),
+              escapeCsv(profile.full_name),
+              escapeCsv(profile.followers),
+              escapeCsv(profile.following),
+              escapeCsv(profile.is_verified),
+              escapeCsv(profile.bio),
+              escapeCsv(profile.profile_url),
+              escapeCsv(profile.timestamp)
+          ];
+          csvRows.push(row.join(','));
+      }
+
+      const csvString = csvRows.join('\n');
+      const blob = new Blob([csvString], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `spyleads_export_${Date.now()}.csv`;
+      a.click();
+
+      URL.revokeObjectURL(url);
   });
 
   // UI Updaters

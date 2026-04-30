@@ -72,14 +72,48 @@ if (!window.__spyLeadsInjected) {
         const username = request.username;
         bgLog(`Extracting profile data directly from DOM for ${username}`);
 
-        // This is where DOM constants and selectors go. For now, dummy data since we can't reliably load IG in Sandbox.
+        const safeText = (selector) => {
+            const el = document.querySelector(selector);
+            return el ? el.innerText.trim() : "";
+        };
+
+        const safeAttribute = (selector, attr) => {
+             const el = document.querySelector(selector);
+             return el ? el.getAttribute(attr) : "";
+        };
+
+        const extractFollowers = () => {
+             const buttons = document.querySelectorAll('button');
+             for (let btn of buttons) {
+                 if (btn.innerText.toLowerCase().includes('followers')) {
+                     const match = btn.innerText.match(/([\d,\.]+)\s*followers?/i);
+                     if (match) return match[1];
+                 }
+             }
+             return "";
+        };
+
+        const extractFollowing = () => {
+             const buttons = document.querySelectorAll('button');
+             for (let btn of buttons) {
+                 if (btn.innerText.toLowerCase().includes('following')) {
+                     const match = btn.innerText.match(/([\d,\.]+)\s*following/i);
+                     if (match) return match[1];
+                 }
+             }
+             return "";
+        };
+
+        // Use selectors or fallbacks
         const profileData = {
            username: username,
-           full_name: document.title || username,
-           followers: "10K",
-           following: "500",
-           bio: "Sample bio",
-           timestamp: new Date().toISOString()
+           full_name: safeText('header section h2') || document.title.split('(')[0].trim() || username,
+           followers: extractFollowers(),
+           following: extractFollowing(),
+           bio: safeText('header section > div:nth-child(3)') || safeText('[data-testid="bio"]') || "",
+           is_verified: !!document.querySelector('svg[aria-label="Verified"]'),
+           timestamp: new Date().toISOString(),
+           profile_url: window.location.href
         };
 
         sendResponse(profileData);
@@ -121,6 +155,27 @@ if (!window.__spyLeadsInjected) {
       return Math.floor(Math.random() * (maxSec - minSec + 1) + minSec) * 1000;
   };
 
+  const scrollPageDown = async () => {
+    window.scrollBy(0, window.innerHeight / 2);
+    await sleep(getRandomDelay(1, 2));
+  };
+
+  const scrapeVisibleUsernames = () => {
+    const links = document.querySelectorAll('a[href^="/"]');
+    const usernames = new Set();
+
+    links.forEach(link => {
+       const href = link.getAttribute('href');
+       if (href && href.length > 2 && href.split('/').length === 3) {
+           const username = href.replaceAll('/', '');
+           if (!['explore', 'reels', 'stories', 'direct', 'p'].includes(username)) {
+              usernames.add(username);
+           }
+       }
+    });
+    return Array.from(usernames);
+  };
+
   // Main loop for batched extraction logic simulating DOM human interactions
   async function executeExtractionPlan() {
       const totalToExtract = extractionPlan.total_extractions;
@@ -131,59 +186,73 @@ if (!window.__spyLeadsInjected) {
       let currentBatch = 0;
       let profilesInCurrentBatch = 0;
 
+      let scrapedUsernamesQueue = [];
+      let processedUsernames = new Set();
+
       while(currentExtracted < totalToExtract) {
           const statusPrefix = `SpyLeads [${currentExtracted + 1}/${totalToExtract}]:`;
-          bgLog(`--- Extracting profile ${currentExtracted + 1} of ${totalToExtract} ---`);
 
-          // Simulating 1. Scroll to profile
+          // 1. Gather usernames if queue is empty
+          if (scrapedUsernamesQueue.length === 0) {
+              updateFloatingUI(`SpyLeads: Scrolling to find profiles...`);
+              await scrollPageDown();
+              const found = scrapeVisibleUsernames();
+              found.forEach(u => {
+                  if (!processedUsernames.has(u)) {
+                      scrapedUsernamesQueue.push(u);
+                      processedUsernames.add(u);
+                  }
+              });
+
+              if (scrapedUsernamesQueue.length === 0) {
+                  bgLog("No new profiles found on screen. Waiting and scrolling...");
+                  await sleep(getRandomDelay(2, 4));
+                  continue; // Try again
+              }
+          }
+
+          const targetUsername = scrapedUsernamesQueue.shift();
+          bgLog(`--- Extracting profile ${currentExtracted + 1} of ${totalToExtract}: ${targetUsername} ---`);
+
+          // Simulating 1. Scroll delay logic
           let delay = getRandomDelay(delays.scroll[0], delays.scroll[1]);
-          bgLog(`Scrolling... waiting ${delay/1000}s`);
-          updateFloatingUI(`${statusPrefix} Scrolling... (${(delay/1000).toFixed(1)}s)`);
+          updateFloatingUI(`${statusPrefix} Preparing (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
-
-          // Simulating 3. Hover & Pause
-          delay = getRandomDelay(2, 5);
-          bgLog(`Hovering... waiting ${delay/1000}s`);
-          updateFloatingUI(`${statusPrefix} Hovering... (${(delay/1000).toFixed(1)}s)`);
-          await sleep(delay);
-
 
           // Option A: Extract profile data via background script -> New Tab
-          // For now, we simulate getting username and sending it to background
-          const username = "dummy_user_" + currentExtracted;
-          bgLog(`Requesting background extraction for ${username}...`);
-          updateFloatingUI(`${statusPrefix} Extracting ${username}...`);
+          updateFloatingUI(`${statusPrefix} Extracting ${targetUsername}...`);
 
           try {
              const profileData = await new Promise((resolve) => {
                  chrome.runtime.sendMessage({
                      action: 'extract-profile-background',
-                     username: username
+                     username: targetUsername
                  }, resolve);
              });
              bgLog("Extracted data:", profileData);
 
-             // Log progress to DB every time a profile is found
-             chrome.runtime.sendMessage({
-                 action: 'log-extraction-progress',
-                 extractionId: request.extractionId || window._currentExtractionId,
-                 profilesFound: currentExtracted,
-                 profilesData: window._extractedProfiles || [],
-                 status: 'in_progress'
-             });
+             if (profileData && profileData.username) {
+                 window._extractedProfiles.push(profileData);
+                 currentExtracted++;
+                 profilesInCurrentBatch++;
+
+                 // Log progress to DB every time a profile is found
+                 chrome.runtime.sendMessage({
+                     action: 'log-extraction-progress',
+                     extractionId: window._currentExtractionId,
+                     profilesFound: currentExtracted,
+                     profilesData: window._extractedProfiles,
+                     status: 'in_progress'
+                 });
+             }
           } catch(e) {
              bgLog("Error in background extraction:", e);
           }
 
-
-          // Simulating 7. Extract Data
+          // Simulating 7. Extract Data / Safety Delay
           delay = getRandomDelay(delays.extraction[0], delays.extraction[1]);
-          bgLog(`Extracting data... waiting ${delay/1000}s`);
-          updateFloatingUI(`${statusPrefix} Extracting... (${(delay/1000).toFixed(1)}s)`);
+          updateFloatingUI(`${statusPrefix} Safety Pause (${(delay/1000).toFixed(1)}s)`);
           await sleep(delay);
-
-          currentExtracted++;
-          profilesInCurrentBatch++;
 
           // Check batch completion limits
           if (profilesInCurrentBatch >= batchSize && currentExtracted < totalToExtract) {
@@ -209,11 +278,20 @@ if (!window.__spyLeadsInjected) {
       isExtracting = false;
       extractionPlan = null;
 
+      // Final log to DB
+      chrome.runtime.sendMessage({
+          action: 'log-extraction-progress',
+          extractionId: window._currentExtractionId,
+          profilesFound: currentExtracted,
+          profilesData: window._extractedProfiles,
+          status: 'completed'
+      });
+
       updateFloatingUI(`SpyLeads: Extraction Complete! ✓`);
       setTimeout(removeFloatingUI, 5000);
 
       // Notify background that extraction finished
-      chrome.runtime.sendMessage({ action: 'extraction-completed' });
+      chrome.runtime.sendMessage({ action: 'extraction-completed', profiles: window._extractedProfiles });
   }
 } else {
     console.log("SpyLeads script was already injected.");
