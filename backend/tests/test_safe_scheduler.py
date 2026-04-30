@@ -1,4 +1,3 @@
-import pytest
 from app.utils.safe_scheduler import SafeScheduler
 
 def test_warmup_limits():

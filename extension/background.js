@@ -312,6 +312,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'extraction-completed') {
         if (request.profiles && request.profiles.length > 0) {
             chrome.storage.local.set({ lastExtractedProfiles: request.profiles });
+            
+            // HYBRID QUOTA SYNC:
+            // Step 1: Optimistic Local Update
+            chrome.storage.sync.get(['quotaUsed'], (data) => {
+                const currentUsed = data.quotaUsed || 0;
+                chrome.storage.sync.set({ quotaUsed: currentUsed + request.profiles.length });
+            });
+            
+            // Step 2: Silent Backend Verification to ensure source of truth
+            verifyStoredLicense();
         }
         return false;
     }

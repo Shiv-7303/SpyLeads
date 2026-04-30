@@ -53,20 +53,11 @@
 
 <!-- Follower Range -->
 <div class="flex flex-col gap-xs">
-    <label class="font-label text-label text-on-surface">Follower Range</label>
-    <div class="grid grid-cols-2 gap-2" id="follower-presets">
-        <button class="border border-surface-variant rounded py-1 text-[12px] bg-secondary text-on-secondary" data-val="none">None</button>
-        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="micro">1k-10k</button>
-        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="small">10k-50k</button>
-        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="mid">50k-100k</button>
-        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="macro">100k-500k</button>
-        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="custom">Custom</button>
-    </div>
-    
-    <div id="custom-follower-range" class="hidden-element flex gap-2 items-center mt-2">
-         <input id="follower-min" class="flex-1 border border-surface-variant rounded bg-surface-container-lowest px-2 py-1 text-[12px] text-on-surface focus:border-secondary" type="number" placeholder="Min" />
+    <label class="font-label text-label text-on-surface">Follower Range (Optional)</label>
+    <div id="custom-follower-range" class="flex gap-2 items-center">
+         <input id="follower-min" class="flex-1 border border-surface-variant rounded bg-surface-container-lowest px-2 py-1 text-[12px] text-on-surface focus:border-secondary" type="number" placeholder="Min" min="0" />
          <span class="text-on-surface-variant">-</span>
-         <input id="follower-max" class="flex-1 border border-surface-variant rounded bg-surface-container-lowest px-2 py-1 text-[12px] text-on-surface focus:border-secondary" type="number" placeholder="Max" />
+         <input id="follower-max" class="flex-1 border border-surface-variant rounded bg-surface-container-lowest px-2 py-1 text-[12px] text-on-surface focus:border-secondary" type="number" placeholder="Max" min="0" />
     </div>
 </div>
 

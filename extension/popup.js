@@ -16,7 +16,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   const hashtagInput = document.getElementById('hashtag-input');
   const locationInput = document.getElementById('location-input');
   
-  const followerPresets = document.getElementById('follower-presets');
   const customFollowerRange = document.getElementById('custom-follower-range');
   const followerMin = document.getElementById('follower-min');
   const followerMax = document.getElementById('follower-max');
@@ -26,7 +25,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const lastSyncTime = document.getElementById('last-sync-time');
 
   let lastExtractedProfiles = [];
-  let selectedFollowerRange = { type: 'none', min: null, max: null };
+  let selectedFollowerRange = { type: 'custom', min: null, max: null };
 
   // Load state from storage
   chrome.storage.sync.get(['plan', 'quotaUsed', 'licenseKey', 'deviceCount'], (data) => {
@@ -41,48 +40,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Follower Preset Logic
-  if (followerPresets) {
-      const presetButtons = followerPresets.querySelectorAll('button');
-      presetButtons.forEach(btn => {
-          btn.addEventListener('click', (e) => {
-              // Reset all buttons
-              presetButtons.forEach(b => {
-                  b.classList.remove('bg-secondary', 'text-on-secondary');
-                  b.classList.add('hover:bg-surface-variant');
-              });
-              
-              // Highlight selected
-              const target = e.target;
-              target.classList.remove('hover:bg-surface-variant');
-              target.classList.add('bg-secondary', 'text-on-secondary');
-              
-              const val = target.getAttribute('data-val');
-              if (val === 'custom') {
-                  customFollowerRange.classList.remove('hidden-element');
-                  selectedFollowerRange.type = 'custom';
-              } else {
-                  customFollowerRange.classList.add('hidden-element');
-                  selectedFollowerRange.type = val;
-                  // Map values
-                  if (val === 'micro') { selectedFollowerRange.min = 1000; selectedFollowerRange.max = 10000; }
-                  else if (val === 'small') { selectedFollowerRange.min = 10000; selectedFollowerRange.max = 50000; }
-                  else if (val === 'mid') { selectedFollowerRange.min = 50000; selectedFollowerRange.max = 100000; }
-                  else if (val === 'macro') { selectedFollowerRange.min = 100000; selectedFollowerRange.max = 500000; }
-                  else { selectedFollowerRange.min = null; selectedFollowerRange.max = null; }
-              }
-          });
-      });
-  }
-
   // Load previously extracted profiles if they exist
   chrome.storage.local.get(['lastExtractedProfiles'], (data) => {
       if (data.lastExtractedProfiles && data.lastExtractedProfiles.length > 0) {
           lastExtractedProfiles = data.lastExtractedProfiles;
           // Optionally, visually indicate there are profiles ready to download
           exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
+          
+          chrome.storage.sync.get(['plan'], (syncData) => {
+              const currentPlan = syncData.plan || PLANS.FREE;
+              if (currentPlan === PLANS.FREE) {
+                  exportCsvBtn.disabled = true;
+                  exportCsvBtn.style.opacity = '0.5';
+                  exportCsvBtn.style.cursor = 'not-allowed';
+              } else {
+                  exportCsvBtn.disabled = false;
+                  exportCsvBtn.style.opacity = '1';
+                  exportCsvBtn.style.cursor = 'pointer';
+              }
+          });
+
           if (extractionProgress) {
-              extractionProgress.innerText = `${lastExtractedProfiles.length} extracted`;
+              // Intentionally left blank or "0 extracted" to avoid showing a stale count
+              extractionProgress.innerText = `Ready`;
           }
       }
   });
@@ -105,12 +85,30 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (message.profiles) {
           lastExtractedProfiles = message.profiles;
           exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
+          chrome.storage.sync.get(['plan'], (syncData) => {
+              const currentPlan = syncData.plan || PLANS.FREE;
+              if (currentPlan === PLANS.FREE) {
+                  exportCsvBtn.disabled = true;
+                  exportCsvBtn.style.opacity = '0.5';
+                  exportCsvBtn.style.cursor = 'not-allowed';
+              } else {
+                  exportCsvBtn.disabled = false;
+                  exportCsvBtn.style.opacity = '1';
+                  exportCsvBtn.style.cursor = 'pointer';
+              }
+          });
+          
+          if (extractionProgress) {
+              extractionProgress.innerText = `Ready`;
+          }
       }
       
-      // Update quota
-      chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
-        updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
-      });
+      // Update quota (with slight delay to allow background optimistic update to land)
+      setTimeout(() => {
+        chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
+          updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
+        });
+      }, 500);
     } else if (message.action === 'extraction-error') {
       extractBtn.disabled = false;
       extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
@@ -119,12 +117,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   exportCsvBtn.addEventListener('click', () => {
-      if (lastExtractedProfiles.length === 0) {
-          showMessage('No leads extracted yet.');
-          return;
-      }
+      chrome.storage.sync.get(['plan'], (syncData) => {
+          const currentPlan = syncData.plan || PLANS.FREE;
+          if (currentPlan === PLANS.FREE) {
+              showMessage('Export is not available on the Free plan. Please upgrade to export.');
+              return;
+          }
 
-      // Convert to CSV
+          if (lastExtractedProfiles.length === 0) {
+              showMessage('No leads extracted yet.');
+              return;
+          }
+
+          // Convert to CSV
       const headers = ['Username', 'Full Name', 'Followers', 'Following', 'Verified', 'Bio', 'Profile URL', 'Extracted At'];
       const csvRows = [headers.join(',')];
 
@@ -162,6 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       a.click();
       
       URL.revokeObjectURL(url);
+      });
   });
 
   // UI Updaters

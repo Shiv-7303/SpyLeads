@@ -1,4 +1,3 @@
-import pytest
 from app import create_app
 
 def test_app_boots():

@@ -5,7 +5,6 @@ from app.models.extraction import Extraction
 from app.models.license import License
 from app import db
 from datetime import datetime
-import json
 
 extraction_bp = Blueprint('extraction_bp', __name__)
 
@@ -13,7 +12,7 @@ extraction_bp = Blueprint('extraction_bp', __name__)
 def check_quota():
     data = request.get_json()
     license_key = data.get('license_key')
-    device_id = data.get('device_id')
+    data.get('device_id')
     
     if not license_key:
         return jsonify({"error": "Missing license_key"}), 400
