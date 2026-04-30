@@ -12,8 +12,21 @@ document.addEventListener('DOMContentLoaded', async () => {
   const extractBtn = document.getElementById('extract-btn');
   const exportCsvBtn = document.getElementById('export-csv-btn');
   const extractCountInput = document.getElementById('extract-count');
+  
+  const hashtagInput = document.getElementById('hashtag-input');
+  const locationInput = document.getElementById('location-input');
+  
+  const followerPresets = document.getElementById('follower-presets');
+  const customFollowerRange = document.getElementById('custom-follower-range');
+  const followerMin = document.getElementById('follower-min');
+  const followerMax = document.getElementById('follower-max');
+  
+  const extractionProgress = document.getElementById('extraction-progress');
+  const upgradeLinkContainer = document.getElementById('upgrade-link-container');
+  const lastSyncTime = document.getElementById('last-sync-time');
 
   let lastExtractedProfiles = [];
+  let selectedFollowerRange = { type: 'none', min: null, max: null };
 
   // Load state from storage
   chrome.storage.sync.get(['plan', 'quotaUsed', 'licenseKey', 'deviceCount'], (data) => {
@@ -28,12 +41,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Follower Preset Logic
+  if (followerPresets) {
+      const presetButtons = followerPresets.querySelectorAll('button');
+      presetButtons.forEach(btn => {
+          btn.addEventListener('click', (e) => {
+              // Reset all buttons
+              presetButtons.forEach(b => {
+                  b.classList.remove('bg-secondary', 'text-on-secondary');
+                  b.classList.add('hover:bg-surface-variant');
+              });
+              
+              // Highlight selected
+              const target = e.target;
+              target.classList.remove('hover:bg-surface-variant');
+              target.classList.add('bg-secondary', 'text-on-secondary');
+              
+              const val = target.getAttribute('data-val');
+              if (val === 'custom') {
+                  customFollowerRange.classList.remove('hidden-element');
+                  selectedFollowerRange.type = 'custom';
+              } else {
+                  customFollowerRange.classList.add('hidden-element');
+                  selectedFollowerRange.type = val;
+                  // Map values
+                  if (val === 'micro') { selectedFollowerRange.min = 1000; selectedFollowerRange.max = 10000; }
+                  else if (val === 'small') { selectedFollowerRange.min = 10000; selectedFollowerRange.max = 50000; }
+                  else if (val === 'mid') { selectedFollowerRange.min = 50000; selectedFollowerRange.max = 100000; }
+                  else if (val === 'macro') { selectedFollowerRange.min = 100000; selectedFollowerRange.max = 500000; }
+                  else { selectedFollowerRange.min = null; selectedFollowerRange.max = null; }
+              }
+          });
+      });
+  }
+
   // Load previously extracted profiles if they exist
   chrome.storage.local.get(['lastExtractedProfiles'], (data) => {
       if (data.lastExtractedProfiles && data.lastExtractedProfiles.length > 0) {
           lastExtractedProfiles = data.lastExtractedProfiles;
           // Optionally, visually indicate there are profiles ready to download
           exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
+          if (extractionProgress) {
+              extractionProgress.innerText = `${lastExtractedProfiles.length} extracted`;
+          }
       }
   });
   
@@ -135,12 +185,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       exportCsvBtn.style.opacity = '0.5';
       exportCsvBtn.style.cursor = 'not-allowed';
       extractBtn.disabled = false;
+      if (upgradeLinkContainer) upgradeLinkContainer.classList.remove('hidden-element');
     } else {
       licenseSection.classList.add('hidden-element');
       exportCsvBtn.disabled = false;
       exportCsvBtn.style.opacity = '1';
       exportCsvBtn.style.cursor = 'pointer';
       extractBtn.disabled = false;
+      if (upgradeLinkContainer) upgradeLinkContainer.classList.add('hidden-element');
     }
 
     const remaining = limit - quotaUsed;
@@ -203,11 +255,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // We need to parse hashtags from input if possible, but let's assume current tab URL is hashtag for now or use dummy hashtag
-      const hashtag = "fitness"; // Should come from UI, keeping dummy for now or extracting from URL
-      const url = new URL(tabs[0].url);
-      let extractedHashtag = url.pathname.split('/explore/tags/')[1] || "fitness";
-      extractedHashtag = extractedHashtag.replace('/', '');
+      
+      let targetHashtag = hashtagInput && hashtagInput.value.trim() !== '' ? hashtagInput.value.trim() : null;
+      if (!targetHashtag) {
+          // Fallback to URL
+          const url = new URL(tabs[0].url);
+          let extractedHashtag = url.pathname.split('/explore/tags/')[1];
+          if (extractedHashtag) {
+              targetHashtag = extractedHashtag.replace('/', '');
+          } else {
+              targetHashtag = "any";
+          }
+      }
+      
+      // Update custom bounds if selected
+      if (selectedFollowerRange.type === 'custom') {
+          selectedFollowerRange.min = followerMin ? parseInt(followerMin.value) : null;
+          selectedFollowerRange.max = followerMax ? parseInt(followerMax.value) : null;
+      }
+      
+      const locationVal = locationInput ? locationInput.value.trim() : '';
 
       // Step 1: Check Quota via background message
       chrome.runtime.sendMessage({ 
@@ -235,7 +302,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             count: parseInt(extractCountInput.value) || 10,
             accountAgeDays: 7, // default
             tabId: tabs[0].id,
-            hashtag: extractedHashtag,
+            hashtag: targetHashtag,
+            location: locationVal,
+            followerRange: selectedFollowerRange,
             sessionSize: quotaRes.session_size
           }, (res) => {
               if (res && res.success) {

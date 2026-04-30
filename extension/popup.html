@@ -51,7 +51,26 @@
     </div>
 </div>
 
-<!-- Follower Range (Reused for Extract count slider logic mapping conceptually) -->
+<!-- Follower Range -->
+<div class="flex flex-col gap-xs">
+    <label class="font-label text-label text-on-surface">Follower Range</label>
+    <div class="grid grid-cols-2 gap-2" id="follower-presets">
+        <button class="border border-surface-variant rounded py-1 text-[12px] bg-secondary text-on-secondary" data-val="none">None</button>
+        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="micro">1k-10k</button>
+        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="small">10k-50k</button>
+        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="mid">50k-100k</button>
+        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="macro">100k-500k</button>
+        <button class="border border-surface-variant rounded py-1 text-[12px] hover:bg-surface-variant" data-val="custom">Custom</button>
+    </div>
+    
+    <div id="custom-follower-range" class="hidden-element flex gap-2 items-center mt-2">
+         <input id="follower-min" class="flex-1 border border-surface-variant rounded bg-surface-container-lowest px-2 py-1 text-[12px] text-on-surface focus:border-secondary" type="number" placeholder="Min" />
+         <span class="text-on-surface-variant">-</span>
+         <input id="follower-max" class="flex-1 border border-surface-variant rounded bg-surface-container-lowest px-2 py-1 text-[12px] text-on-surface focus:border-secondary" type="number" placeholder="Max" />
+    </div>
+</div>
+
+<!-- Extract Count -->
 <div class="flex flex-col gap-xs">
     <label class="font-label text-label text-on-surface">Leads to Extract</label>
     <div class="flex items-center gap-sm">
@@ -63,8 +82,15 @@
 </div>
 </section>
 
-<!-- ACTION -->
-<div class="pt-sm pb-md flex flex-col gap-2">
+<!-- ACTION & PROGRESS -->
+<div class="pt-sm flex flex-col gap-2">
+    <div class="flex justify-between items-center text-[11px] text-outline px-1">
+        <span id="extraction-progress">0 extracted (0 checked)</span>
+        <div class="flex items-center gap-1" title="Safety mode is always enabled">
+            <span class="material-symbols-outlined text-[14px]">shield</span>
+            <span>Safety Mode</span>
+        </div>
+    </div>
     <button id="extract-btn" class="w-full bg-primary text-on-primary font-label text-label py-md px-container-padding rounded-lg flex items-center justify-center gap-sm shadow-sm hover:opacity-90 transition-opacity">
         <span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
         Extract Profiles
@@ -73,6 +99,15 @@
         <span class="material-symbols-outlined text-[20px]">download</span>
         Export CSV (Pro)
     </button>
+</div>
+
+<!-- UPGRADE LINK FOR FREE USERS -->
+<div id="upgrade-link-container" class="hidden-element text-center pt-2">
+    <a href="#" class="text-primary text-[12px] hover:underline font-bold">Upgrade to Pro to extract more leads</a>
+</div>
+
+<div class="text-center text-[10px] text-outline mt-2" id="last-sync-time">
+    Last sync: Just now
 </div>
 
 <!-- LICENSE -->
