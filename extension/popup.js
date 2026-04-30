@@ -13,6 +13,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const exportCsvBtn = document.getElementById('export-csv-btn');
   const extractCountInput = document.getElementById('extract-count');
 
+  let lastExtractedProfiles = [];
+
   // Load state from storage
   chrome.storage.sync.get(['plan', 'quotaUsed', 'licenseKey', 'deviceCount'], (data) => {
     const plan = data.plan || PLANS.FREE;
@@ -25,6 +27,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       licenseInput.value = data.licenseKey;
     }
   });
+
+  // Load previously extracted profiles if they exist
+  chrome.storage.local.get(['lastExtractedProfiles'], (data) => {
+      if (data.lastExtractedProfiles && data.lastExtractedProfiles.length > 0) {
+          lastExtractedProfiles = data.lastExtractedProfiles;
+          // Optionally, visually indicate there are profiles ready to download
+          exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
+      }
+  });
   
   // Check if extraction is currently active
   chrome.runtime.sendMessage({ action: 'get-extraction-status' }, (response) => {
@@ -33,8 +44,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
       }
   });
-  
-  let lastExtractedProfiles = [];
 
   // Listen for extraction updates
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -45,6 +54,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (message.profiles) {
           lastExtractedProfiles = message.profiles;
+          exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
       }
       
       // Update quota

@@ -308,6 +308,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         logExtractionProgress(request.extractionId, request.profilesFound, request.profilesData, request.status);
         return false;
     }
+
+    if (request.action === 'extraction-completed') {
+        if (request.profiles && request.profiles.length > 0) {
+            chrome.storage.local.set({ lastExtractedProfiles: request.profiles });
+        }
+        return false;
+    }
 });
 
 async function logExtractionProgress(extractionId, profilesFound, profilesData, status) {
