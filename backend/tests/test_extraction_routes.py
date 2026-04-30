@@ -2,7 +2,6 @@ import pytest
 from app import create_app, db
 from app.models.license import License
 from app.models.extraction import Extraction
-from app.utils.token import generate_session_token
 
 @pytest.fixture
 def client():
@@ -27,7 +26,7 @@ def test_check_quota_success(client):
     })
     assert response.status_code == 200
     data = response.get_json()
-    assert data['allowed'] == True
+    assert data['allowed']
     assert data['remaining'] == 80
 
 def test_check_quota_exceeded(client):
@@ -46,7 +45,7 @@ def test_check_quota_exceeded(client):
     })
     assert response.status_code == 403
     data = response.get_json()
-    assert data['allowed'] == False
+    assert not data['allowed']
 
 def test_start_extraction(client):
     response = client.post('/api/v1/extraction/start', json={
@@ -58,7 +57,7 @@ def test_start_extraction(client):
     })
     assert response.status_code == 200
     data = response.get_json()
-    assert data['success'] == True
+    assert data['success']
     assert 'extraction_id' in data
 
 def test_log_extraction(client):
@@ -77,7 +76,7 @@ def test_log_extraction(client):
         'status': 'in_progress'
     })
     assert log_res.status_code == 200
-    assert log_res.get_json()['success'] == True
+    assert log_res.get_json()['success']
 
 def test_get_progress(client):
     response = client.post('/api/v1/extraction/start', json={
@@ -89,5 +88,5 @@ def test_get_progress(client):
     prog_res = client.get(f'/api/v1/extraction/progress/{ext_id}')
     assert prog_res.status_code == 200
     data = prog_res.get_json()
-    assert data['success'] == True
+    assert data['success']
     assert data['progress']['status'] == 'in_progress'

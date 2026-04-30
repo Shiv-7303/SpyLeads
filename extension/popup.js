@@ -13,6 +13,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   const exportCsvBtn = document.getElementById('export-csv-btn');
   const extractCountInput = document.getElementById('extract-count');
 
+  const hashtagInput = document.getElementById('hashtag-input');
+  const locationInput = document.getElementById('location-input');
+
+  const customFollowerRange = document.getElementById('custom-follower-range');
+  const followerMin = document.getElementById('follower-min');
+  const followerMax = document.getElementById('follower-max');
+
+  const extractionProgress = document.getElementById('extraction-progress');
+  const upgradeLinkContainer = document.getElementById('upgrade-link-container');
+  const lastSyncTime = document.getElementById('last-sync-time');
+
+  let lastExtractedProfiles = [];
+  let selectedFollowerRange = { type: 'custom', min: null, max: null };
+
   // Load state from storage
   chrome.storage.sync.get(['plan', 'quotaUsed', 'licenseKey', 'deviceCount'], (data) => {
     const plan = data.plan || PLANS.FREE;
@@ -26,6 +40,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Load previously extracted profiles if they exist
+  chrome.storage.local.get(['lastExtractedProfiles'], (data) => {
+      if (data.lastExtractedProfiles && data.lastExtractedProfiles.length > 0) {
+          lastExtractedProfiles = data.lastExtractedProfiles;
+          // Optionally, visually indicate there are profiles ready to download
+          exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
+
+          chrome.storage.sync.get(['plan'], (syncData) => {
+              const currentPlan = syncData.plan || PLANS.FREE;
+              if (currentPlan === PLANS.FREE) {
+                  exportCsvBtn.disabled = true;
+                  exportCsvBtn.style.opacity = '0.5';
+                  exportCsvBtn.style.cursor = 'not-allowed';
+              } else {
+                  exportCsvBtn.disabled = false;
+                  exportCsvBtn.style.opacity = '1';
+                  exportCsvBtn.style.cursor = 'pointer';
+              }
+          });
+
+          if (extractionProgress) {
+              // Intentionally left blank or "0 extracted" to avoid showing a stale count
+              extractionProgress.innerText = `Ready`;
+          }
+      }
+  });
+
   // Check if extraction is currently active
   chrome.runtime.sendMessage({ action: 'get-extraction-status' }, (response) => {
       if (response && response.isExtracting) {
@@ -33,8 +74,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px] animate-spin">refresh</span> In Progress...';
       }
   });
-
-  let lastExtractedProfiles = [];
 
   // Listen for extraction updates
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -45,12 +84,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       if (message.profiles) {
           lastExtractedProfiles = message.profiles;
+          exportCsvBtn.innerHTML = `<span class="material-symbols-outlined text-[20px]">download</span> Export CSV (${lastExtractedProfiles.length} ready)`;
+          chrome.storage.sync.get(['plan'], (syncData) => {
+              const currentPlan = syncData.plan || PLANS.FREE;
+              if (currentPlan === PLANS.FREE) {
+                  exportCsvBtn.disabled = true;
+                  exportCsvBtn.style.opacity = '0.5';
+                  exportCsvBtn.style.cursor = 'not-allowed';
+              } else {
+                  exportCsvBtn.disabled = false;
+                  exportCsvBtn.style.opacity = '1';
+                  exportCsvBtn.style.cursor = 'pointer';
+              }
+          });
+
+          if (extractionProgress) {
+              extractionProgress.innerText = `Ready`;
+          }
       }
 
-      // Update quota
-      chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
-        updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
-      });
+      // Update quota (with slight delay to allow background optimistic update to land)
+      setTimeout(() => {
+        chrome.storage.sync.get(['plan', 'quotaUsed', 'deviceCount'], (data) => {
+          updateUIForPlan(data.plan || PLANS.FREE, data.quotaUsed || 0, data.deviceCount || 1);
+        });
+      }, 500);
     } else if (message.action === 'extraction-error') {
       extractBtn.disabled = false;
       extractBtn.innerHTML = '<span class="material-symbols-outlined text-[20px]">search</span> Extract Leads';
@@ -59,12 +117,19 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   exportCsvBtn.addEventListener('click', () => {
-      if (lastExtractedProfiles.length === 0) {
-          showMessage('No leads extracted yet.');
-          return;
-      }
+      chrome.storage.sync.get(['plan'], (syncData) => {
+          const currentPlan = syncData.plan || PLANS.FREE;
+          if (currentPlan === PLANS.FREE) {
+              showMessage('Export is not available on the Free plan. Please upgrade to export.');
+              return;
+          }
 
-      // Convert to CSV
+          if (lastExtractedProfiles.length === 0) {
+              showMessage('No leads extracted yet.');
+              return;
+          }
+
+          // Convert to CSV
       const headers = ['Username', 'Full Name', 'Followers', 'Following', 'Verified', 'Bio', 'Profile URL', 'Extracted At'];
       const csvRows = [headers.join(',')];
 
@@ -102,6 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       a.click();
 
       URL.revokeObjectURL(url);
+      });
   });
 
   // UI Updaters
@@ -125,12 +191,14 @@ document.addEventListener('DOMContentLoaded', async () => {
       exportCsvBtn.style.opacity = '0.5';
       exportCsvBtn.style.cursor = 'not-allowed';
       extractBtn.disabled = false;
+      if (upgradeLinkContainer) upgradeLinkContainer.classList.remove('hidden-element');
     } else {
       licenseSection.classList.add('hidden-element');
       exportCsvBtn.disabled = false;
       exportCsvBtn.style.opacity = '1';
       exportCsvBtn.style.cursor = 'pointer';
       extractBtn.disabled = false;
+      if (upgradeLinkContainer) upgradeLinkContainer.classList.add('hidden-element');
     }
 
     const remaining = limit - quotaUsed;
@@ -193,11 +261,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // We need to parse hashtags from input if possible, but let's assume current tab URL is hashtag for now or use dummy hashtag
-      const hashtag = "fitness"; // Should come from UI, keeping dummy for now or extracting from URL
-      const url = new URL(tabs[0].url);
-      let extractedHashtag = url.pathname.split('/explore/tags/')[1] || "fitness";
-      extractedHashtag = extractedHashtag.replace('/', '');
+
+      let targetHashtag = hashtagInput && hashtagInput.value.trim() !== '' ? hashtagInput.value.trim() : null;
+      if (!targetHashtag) {
+          // Fallback to URL
+          const url = new URL(tabs[0].url);
+          let extractedHashtag = url.pathname.split('/explore/tags/')[1];
+          if (extractedHashtag) {
+              targetHashtag = extractedHashtag.replace('/', '');
+          } else {
+              targetHashtag = "any";
+          }
+      }
+
+      // Update custom bounds if selected
+      if (selectedFollowerRange.type === 'custom') {
+          selectedFollowerRange.min = followerMin ? parseInt(followerMin.value) : null;
+          selectedFollowerRange.max = followerMax ? parseInt(followerMax.value) : null;
+      }
+
+      const locationVal = locationInput ? locationInput.value.trim() : '';
 
       // Step 1: Check Quota via background message
       chrome.runtime.sendMessage({
@@ -225,7 +308,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             count: parseInt(extractCountInput.value) || 10,
             accountAgeDays: 7, // default
             tabId: tabs[0].id,
-            hashtag: extractedHashtag,
+            hashtag: targetHashtag,
+            location: locationVal,
+            followerRange: selectedFollowerRange,
             sessionSize: quotaRes.session_size
           }, (res) => {
               if (res && res.success) {

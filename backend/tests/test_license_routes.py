@@ -1,6 +1,5 @@
 import pytest
 from app import create_app, db
-from app.models.license import License
 import json
 
 @pytest.fixture
