@@ -333,8 +333,7 @@ async function extractProfileInBackground(username, mainTabId) {
     // Step 1: Open profile in new background tab
     const profileTab = await chrome.tabs.create({
       url: profileUrl,
-      active: false,  // BACKGROUND TAB
-      openerTabId: mainTabId
+      active: false  // BACKGROUND TAB
     });
     
     console.log(`[EXTRACT] Opened profile tab: ${profileTab.id} for ${username}`);
